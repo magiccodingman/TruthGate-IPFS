@@ -1,0 +1,39 @@
+name: TLS lifecycle tests
+
+on:
+  pull_request:
+    paths:
+      - "TruthGate-Web/TruthGate-Web/Configuration/**"
+      - "TruthGate-Web/TruthGate-Web/Services/ConfigWatchAndIssueService.cs"
+      - "TruthGate-Web/TruthGate-Web.Tests/**"
+      - ".github/workflows/tls-lifecycle.yml"
+  push:
+    branches:
+      - master
+    paths:
+      - "TruthGate-Web/TruthGate-Web/Configuration/**"
+      - "TruthGate-Web/TruthGate-Web/Services/ConfigWatchAndIssueService.cs"
+      - "TruthGate-Web/TruthGate-Web.Tests/**"
+      - ".github/workflows/tls-lifecycle.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Restore
+        run: dotnet restore TruthGate-Web/TruthGate-Web.Tests/TruthGate-Web.Tests.csproj
+
+      - name: Test
+        run: >
+          dotnet test
+          TruthGate-Web/TruthGate-Web.Tests/TruthGate-Web.Tests.csproj
+          --no-restore
+          --configuration Release
+          --logger "console;verbosity=normal"

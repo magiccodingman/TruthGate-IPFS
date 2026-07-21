@@ -1,11 +1,11 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Security.Cryptography;
+using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Certes;
 using Certes.Acme;
 using Certes.Acme.Resource;
-using System.Security.Cryptography.Pkcs;
 
 namespace TruthGate_Web.Configuration
 {
@@ -29,214 +29,436 @@ namespace TruthGate_Web.Configuration
             _accountPemPath = accountPemPath;
             _logger = logger;
             _isStaging = useStaging;
-            _dirUri = useStaging ? WellKnownServers.LetsEncryptStagingV2 : WellKnownServers.LetsEncryptV2;
+            _dirUri = useStaging
+                ? WellKnownServers.LetsEncryptStagingV2
+                : WellKnownServers.LetsEncryptV2;
         }
 
-        public async Task<X509Certificate2?> IssueOrRenewAsync(string host, CancellationToken ct = default)
+        public async Task<X509Certificate2?> IssueOrRenewAsync(
+            string host,
+            CancellationToken ct = default)
         {
             try
             {
                 _logger.LogInformation("ACME[{Dir}] start {Host}", Label, host);
 
-                // 1) ACME context + account
-                var accountKey = await LoadOrCreateAccountKeyAsync(ct);
+                var accountKey = await LoadOrCreateAccountKeyAsync(ct).ConfigureAwait(false);
                 var acme = new AcmeContext(_dirUri, accountKey);
-                try { await acme.NewAccount(Array.Empty<string>(), true); }
-                catch { _logger.LogDebug("ACME[{Dir}] account exists", Label); }
 
-                // 2) Create order & validate HTTP-01
-                var order = await acme.NewOrder(new[] { host });
+                try
+                {
+                    await acme.NewAccount(Array.Empty<string>(), true).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "ACME[{Dir}] account already registered or reusable", Label);
+                }
+
+                var order = await acme.NewOrder(new[] { host }).ConfigureAwait(false);
                 _logger.LogInformation("ACME[{Dir}] order created for {Host}", Label, host);
 
-                var authzs = await order.Authorizations();
-                foreach (var authz in authzs)
+                var authorizations = await order.Authorizations().ConfigureAwait(false);
+                foreach (var authorization in authorizations)
                 {
-                    var http = await authz.Http();
+                    var http = await authorization.Http().ConfigureAwait(false);
                     var token = http.Token;
-                    var keyAuthz = http.KeyAuthz;
+                    var keyAuthorization = http.KeyAuthz;
                     var url = $"http://{host}/.well-known/acme-challenge/{token}";
 
-                    // Preflight (best-effort)
+                    _challengeStore.Put(token, keyAuthorization, TimeSpan.FromMinutes(10));
                     try
                     {
-                        using var hc = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false });
-                        hc.Timeout = TimeSpan.FromSeconds(5);
-                        var resp = await hc.GetAsync(url, ct);
-                        var body = await resp.Content.ReadAsStringAsync(ct);
-                        _logger.LogInformation("Preflight GET {Url} -> {Status} len={Len}", url, (int)resp.StatusCode, body.Length);
-                        if (resp.StatusCode == System.Net.HttpStatusCode.OK && !string.Equals(body, keyAuthz, StringComparison.Ordinal))
-                            _logger.LogWarning("Preflight mismatch: body != keyAuthz (first 60) body='{Body}'", body.Length > 60 ? body[..60] : body);
-                    }
-                    catch (Exception ex) { _logger.LogWarning(ex, "Preflight GET failed"); }
+                        await RunPreflightAsync(url, keyAuthorization, ct).ConfigureAwait(false);
+                        await http.Validate().ConfigureAwait(false);
 
-                    _challengeStore.Put(token, keyAuthz, TimeSpan.FromMinutes(10));
-                    await http.Validate();
+                        var challengeDeadline =
+                            DateTimeOffset.UtcNow + TimeSpan.FromMinutes(2);
 
-                    var chDeadline = DateTimeOffset.UtcNow + TimeSpan.FromMinutes(2);
-                    while (true)
-                    {
-                        ct.ThrowIfCancellationRequested();
-                        var chRes = await http.Resource();
-                        if (chRes.Status == ChallengeStatus.Valid)
+                        while (true)
                         {
-                            _logger.LogInformation("ACME[{Dir}] challenge VALID for {Host}", Label, host);
-                            break;
-                        }
-                        if (chRes.Status == ChallengeStatus.Invalid)
-                            throw new InvalidOperationException($"ACME authorization failed for {host}: {chRes.Error?.Type} {chRes.Error?.Detail}");
-                        if (DateTimeOffset.UtcNow > chDeadline)
-                            throw new TimeoutException($"ACME challenge timed out for {host}");
-                        await Task.Delay(1000, ct);
-                    }
+                            ct.ThrowIfCancellationRequested();
 
-                    _challengeStore.Remove(token);
+                            var challenge = await http.Resource().ConfigureAwait(false);
+                            if (challenge.Status == ChallengeStatus.Valid)
+                            {
+                                _logger.LogInformation(
+                                    "ACME[{Dir}] challenge VALID for {Host}",
+                                    Label,
+                                    host);
+                                break;
+                            }
+
+                            if (challenge.Status == ChallengeStatus.Invalid)
+                            {
+                                throw new InvalidOperationException(
+                                    $"ACME authorization failed for {host}: " +
+                                    $"{challenge.Error?.Type} {challenge.Error?.Detail}");
+                            }
+
+                            if (DateTimeOffset.UtcNow > challengeDeadline)
+                            {
+                                throw new TimeoutException(
+                                    $"ACME challenge timed out for {host}");
+                            }
+
+                            await Task.Delay(1000, ct).ConfigureAwait(false);
+                        }
+                    }
+                    finally
+                    {
+                        _challengeStore.Remove(token);
+                    }
                 }
 
-                // 3) Finalize order (poll to READY to finalize to poll to VALID)
-                var acctKey = KeyFactory.NewKey(KeyAlgorithm.ES256);
+                var certificateKey = KeyFactory.NewKey(KeyAlgorithm.ES256);
                 var csrInfo = new CsrInfo { CommonName = host };
 
-                var deadline = DateTimeOffset.UtcNow + TimeSpan.FromMinutes(2);
-                var oRes = await order.Resource();
-                while (oRes.Status is OrderStatus.Pending or OrderStatus.Processing)
+                var orderDeadline = DateTimeOffset.UtcNow + TimeSpan.FromMinutes(2);
+                var orderResource = await order.Resource().ConfigureAwait(false);
+
+                while (orderResource.Status is OrderStatus.Pending or OrderStatus.Processing)
                 {
-                    if (DateTimeOffset.UtcNow > deadline)
-                        throw new TimeoutException($"ACME order not ready for {host} (status={oRes.Status}).");
-                    await Task.Delay(1000, ct);
-                    oRes = await order.Resource();
+                    ct.ThrowIfCancellationRequested();
+
+                    if (DateTimeOffset.UtcNow > orderDeadline)
+                    {
+                        throw new TimeoutException(
+                            $"ACME order not ready for {host} (status={orderResource.Status}).");
+                    }
+
+                    await Task.Delay(1000, ct).ConfigureAwait(false);
+                    orderResource = await order.Resource().ConfigureAwait(false);
                 }
 
-                if (oRes.Status != OrderStatus.Valid)
+                if (orderResource.Status != OrderStatus.Valid)
+                    await order.Finalize(csrInfo, certificateKey).ConfigureAwait(false);
+
+                orderDeadline = DateTimeOffset.UtcNow + TimeSpan.FromMinutes(2);
+                orderResource = await order.Resource().ConfigureAwait(false);
+
+                while (orderResource.Status is
+                       OrderStatus.Processing or
+                       OrderStatus.Pending or
+                       OrderStatus.Ready)
                 {
-                    await order.Finalize(csrInfo, acctKey);
+                    ct.ThrowIfCancellationRequested();
+
+                    if (DateTimeOffset.UtcNow > orderDeadline)
+                    {
+                        throw new TimeoutException(
+                            $"ACME finalize timed out for {host} " +
+                            $"(status={orderResource.Status}).");
+                    }
+
+                    await Task.Delay(1000, ct).ConfigureAwait(false);
+                    orderResource = await order.Resource().ConfigureAwait(false);
                 }
 
-                deadline = DateTimeOffset.UtcNow + TimeSpan.FromMinutes(2);
-                oRes = await order.Resource();
-                while (oRes.Status is OrderStatus.Processing or OrderStatus.Pending or OrderStatus.Ready)
+                if (orderResource.Status != OrderStatus.Valid)
                 {
-                    if (DateTimeOffset.UtcNow > deadline)
-                        throw new TimeoutException($"ACME finalize timed out for {host} (status={oRes.Status}).");
-                    await Task.Delay(1000, ct);
-                    oRes = await order.Resource();
+                    throw new InvalidOperationException(
+                        $"ACME order did not become valid for {host} " +
+                        $"(status={orderResource.Status}).");
                 }
-                if (oRes.Status != OrderStatus.Valid)
-                    throw new InvalidOperationException($"ACME order did not become valid for {host} (status={oRes.Status}).");
 
-                // 4) Download chain and build PFX WITHOUT using key-bound ToPem
-                // 4) Download the chain
-                var chain = await order.Download();
-
-                // === Build PFX without any ToPem/ToPfx usage ===
+                var chain = await order.Download().ConfigureAwait(false);
                 var (leafDer, issuersDer) = ExtractDerFromChain(chain);
 
-                // Load leaf (public)
-                var leafPublic = X509CertificateLoader.LoadCertificate(leafDer);
-
-                // Import ES256 private key from Certes and bind to leaf
+                using var leafPublic = X509CertificateLoader.LoadCertificate(leafDer);
                 using var ecdsa = ECDsa.Create();
-                ecdsa.ImportPkcs8PrivateKey(acctKey.ToDer(), out _);
-                var leafWithKey = leafPublic.CopyWithPrivateKey(ecdsa);
+                ecdsa.ImportPkcs8PrivateKey(certificateKey.ToDer(), out _);
 
-                // Assemble PKCS#12
+                using var leafWithKey = leafPublic.CopyWithPrivateKey(ecdsa);
+
                 var pfxBuilder = new Pkcs12Builder();
 
-                // Bag A: leaf + shrouded private key
                 var leafBag = new Pkcs12SafeContents();
                 leafBag.AddCertificate(leafWithKey);
                 leafBag.AddShroudedKey(
                     ecdsa,
-                    password: "", // empty is fine for your server-side storage
-                    new PbeParameters(PbeEncryptionAlgorithm.Aes256Cbc, HashAlgorithmName.SHA256, 100_000)
-                );
+                    password: string.Empty,
+                    new PbeParameters(
+                        PbeEncryptionAlgorithm.Aes256Cbc,
+                        HashAlgorithmName.SHA256,
+                        100_000));
+
                 pfxBuilder.AddSafeContentsUnencrypted(leafBag);
 
-                // Bag B: intermediates
                 if (issuersDer.Count > 0)
                 {
-                    var interBag = new Pkcs12SafeContents();
+                    var issuerBag = new Pkcs12SafeContents();
                     foreach (var der in issuersDer)
                     {
-                        var ic = X509CertificateLoader.LoadCertificate(der);
-                        interBag.AddCertificate(ic);
+                        using var issuer = X509CertificateLoader.LoadCertificate(der);
+                        issuerBag.AddCertificate(issuer);
                     }
-                    pfxBuilder.AddSafeContentsUnencrypted(interBag);
+
+                    pfxBuilder.AddSafeContentsUnencrypted(issuerBag);
                 }
 
-                // Seal & emit
-                pfxBuilder.SealWithMac("", HashAlgorithmName.SHA256, 100_000);
+                pfxBuilder.SealWithMac(
+                    string.Empty,
+                    HashAlgorithmName.SHA256,
+                    100_000);
+
                 var pfxBytes = pfxBuilder.Encode();
 
-                _logger.LogInformation("ACME[{Dir}] issued PFX for {Host} (len={Len})", Label, host, pfxBytes.Length);
-                return X509CertificateLoader.LoadPkcs12(pfxBytes, ReadOnlySpan<char>.Empty);
+                _logger.LogInformation(
+                    "ACME[{Dir}] issued PFX for {Host} (len={Len})",
+                    Label,
+                    host,
+                    pfxBytes.Length);
 
+                return X509CertificateLoader.LoadPkcs12(
+                    pfxBytes,
+                    ReadOnlySpan<char>.Empty);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "ACME[{Dir}] issuance FAILED for {Host}", Label, host);
+                _logger.LogError(
+                    ex,
+                    "ACME[{Dir}] issuance FAILED for {Host}",
+                    Label,
+                    host);
                 throw;
+            }
+        }
+
+        private async Task RunPreflightAsync(
+            string url,
+            string keyAuthorization,
+            CancellationToken ct)
+        {
+            try
+            {
+                using var client = new HttpClient(
+                    new HttpClientHandler { AllowAutoRedirect = false })
+                {
+                    Timeout = TimeSpan.FromSeconds(5)
+                };
+
+                using var response = await client.GetAsync(url, ct).ConfigureAwait(false);
+                var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+
+                _logger.LogInformation(
+                    "Preflight GET {Url} -> {Status} len={Len}",
+                    url,
+                    (int)response.StatusCode,
+                    body.Length);
+
+                if (response.StatusCode == System.Net.HttpStatusCode.OK &&
+                    !string.Equals(body, keyAuthorization, StringComparison.Ordinal))
+                {
+                    _logger.LogWarning(
+                        "Preflight mismatch: body != keyAuthz (first 60) body='{Body}'",
+                        body.Length > 60 ? body[..60] : body);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Preflight GET failed");
             }
         }
 
         private async Task<IKey> LoadOrCreateAccountKeyAsync(CancellationToken ct)
         {
-            var dir = Path.GetDirectoryName(_accountPemPath)!;
-            System.IO.Directory.CreateDirectory(dir);
+            var directory = Path.GetDirectoryName(_accountPemPath)!;
+            EnsureDirectory(directory);
 
             if (File.Exists(_accountPemPath))
             {
-                _logger.LogInformation("ACME account key: using existing {Path}", _accountPemPath);
-                var pem = await File.ReadAllTextAsync(_accountPemPath, ct);
+                HardenFile(_accountPemPath);
+                _logger.LogInformation(
+                    "ACME account key: using existing {Path}",
+                    _accountPemPath);
+
+                var pem = await File.ReadAllTextAsync(_accountPemPath, ct)
+                    .ConfigureAwait(false);
                 return KeyFactory.FromPem(pem);
             }
 
-            _logger.LogInformation("ACME account key: creating {Path}", _accountPemPath);
+            _logger.LogInformation(
+                "ACME account key: creating {Path}",
+                _accountPemPath);
+
             var key = KeyFactory.NewKey(KeyAlgorithm.ES256);
-            await File.WriteAllTextAsync(_accountPemPath, key.ToPem(), ct);
+            await WriteTextAtomicallyAsync(
+                    _accountPemPath,
+                    key.ToPem(),
+                    ct)
+                .ConfigureAwait(false);
+
             return key;
         }
 
-        // Pulls leaf + issuer DER certs out of Certes' CertificateChain without calling ToPem().
-        private static (byte[] leafDer, List<byte[]> issuersDer) ExtractDerFromChain(object certificateChain)
+        private static async Task WriteTextAtomicallyAsync(
+            string path,
+            string content,
+            CancellationToken ct)
         {
-            var t = certificateChain.GetType();
+            var directory = Path.GetDirectoryName(path)!;
+            EnsureDirectory(directory);
 
-            // Leaf: property is often "Certificate" or "Leaf"
-            var leafObj =
-                t.GetProperty("Certificate")?.GetValue(certificateChain)
-                ?? t.GetProperty("Leaf")?.GetValue(certificateChain)
-                ?? throw new InvalidOperationException("CertificateChain leaf not found.");
+            var tempPath = Path.Combine(
+                directory,
+                $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
 
-            var toDer = leafObj.GetType().GetMethod("ToDer")
-                       ?? throw new InvalidOperationException("Leaf.ToDer() not found.");
-            var leafDer = (byte[])toDer.Invoke(leafObj, Array.Empty<object>())!;
+            try
+            {
+                await using (var stream = new FileStream(
+                    tempPath,
+                    FileMode.CreateNew,
+                    FileAccess.Write,
+                    FileShare.None,
+                    bufferSize: 4096,
+                    FileOptions.Asynchronous | FileOptions.WriteThrough))
+                {
+                    await using var writer = new StreamWriter(
+                        stream,
+                        new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                        bufferSize: 4096,
+                        leaveOpen: true);
 
-            // Issuers: property names vary across Certes versions
-            var issuerPropNames = new[] { "Chain", "IssuerChain", "IssuerCertificates", "Certificates" };
+                    await writer.WriteAsync(content.AsMemory(), ct).ConfigureAwait(false);
+                    await writer.FlushAsync(ct).ConfigureAwait(false);
+                    stream.Flush(flushToDisk: true);
+                }
+
+                HardenFile(tempPath);
+
+                if (File.Exists(path))
+                {
+                    try
+                    {
+                        File.Replace(
+                            tempPath,
+                            path,
+                            destinationBackupFileName: null,
+                            ignoreMetadataErrors: true);
+                    }
+                    catch (PlatformNotSupportedException)
+                    {
+                        File.Move(tempPath, path, overwrite: true);
+                    }
+                    catch (IOException)
+                    {
+                        File.Move(tempPath, path, overwrite: true);
+                    }
+                }
+                else
+                {
+                    File.Move(tempPath, path);
+                }
+
+                HardenFile(path);
+            }
+            finally
+            {
+                try
+                {
+                    if (File.Exists(tempPath))
+                        File.Delete(tempPath);
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        private static void EnsureDirectory(string directory)
+        {
+            Directory.CreateDirectory(directory);
+
+            if (OperatingSystem.IsWindows())
+                return;
+
+            try
+            {
+                Directory.SetUnixFileMode(
+                    directory,
+                    UnixFileMode.UserRead |
+                    UnixFileMode.UserWrite |
+                    UnixFileMode.UserExecute);
+            }
+            catch
+            {
+            }
+        }
+
+        private static void HardenFile(string path)
+        {
+            if (OperatingSystem.IsWindows() || !File.Exists(path))
+                return;
+
+            try
+            {
+                File.SetUnixFileMode(
+                    path,
+                    UnixFileMode.UserRead |
+                    UnixFileMode.UserWrite);
+            }
+            catch
+            {
+            }
+        }
+
+        private static (byte[] LeafDer, List<byte[]> IssuersDer)
+            ExtractDerFromChain(object certificateChain)
+        {
+            var type = certificateChain.GetType();
+
+            var leafObject =
+                type.GetProperty("Certificate")?.GetValue(certificateChain) ??
+                type.GetProperty("Leaf")?.GetValue(certificateChain) ??
+                throw new InvalidOperationException("CertificateChain leaf not found.");
+
+            var toDer = leafObject.GetType().GetMethod("ToDer") ??
+                        throw new InvalidOperationException("Leaf.ToDer() not found.");
+
+            var leafDer = (byte[])toDer.Invoke(
+                leafObject,
+                Array.Empty<object>())!;
+
+            var issuerPropertyNames = new[]
+            {
+                "Chain",
+                "IssuerChain",
+                "IssuerCertificates",
+                "Certificates"
+            };
+
             var issuersDer = new List<byte[]>();
 
-            foreach (var name in issuerPropNames)
+            foreach (var propertyName in issuerPropertyNames)
             {
-                var p = t.GetProperty(name);
-                if (p == null) continue;
-
-                if (p.GetValue(certificateChain) is System.Collections.IEnumerable coll)
+                var property = type.GetProperty(propertyName);
+                if (property?.GetValue(certificateChain) is not
+                    System.Collections.IEnumerable collection)
                 {
-                    foreach (var item in coll)
-                    {
-                        var m = item.GetType().GetMethod("ToDer");
-                        if (m == null) continue;
-                        var der = (byte[])m.Invoke(item, Array.Empty<object>())!;
-                        // Some versions include the leaf again in the list — filter it out
-                        if (!der.AsSpan().SequenceEqual(leafDer))
-                            issuersDer.Add(der);
-                    }
-                    break; // we found a valid property
+                    continue;
                 }
+
+                foreach (var item in collection)
+                {
+                    if (item is null)
+                        continue;
+
+                    var method = item.GetType().GetMethod("ToDer");
+                    if (method is null)
+                        continue;
+
+                    var der = (byte[])method.Invoke(
+                        item,
+                        Array.Empty<object>())!;
+
+                    if (!der.AsSpan().SequenceEqual(leafDer))
+                        issuersDer.Add(der);
+                }
+
+                break;
             }
 
             return (leafDer, issuersDer);
         }
-
     }
 }
