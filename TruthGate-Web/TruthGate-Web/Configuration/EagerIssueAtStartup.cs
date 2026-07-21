@@ -1,4 +1,4 @@
-﻿using TruthGate_Web.Services;
+using TruthGate_Web.Services;
 
 namespace TruthGate_Web.Configuration
 {
@@ -6,34 +6,47 @@ namespace TruthGate_Web.Configuration
     {
         private readonly IConfigService _config;
         private readonly LiveCertProvider _live;
+        private readonly ILogger<EagerIssueAtStartup> _logger;
 
-        public EagerIssueAtStartup(IConfigService cfg, LiveCertProvider live)
+        public EagerIssueAtStartup(
+            IConfigService config,
+            LiveCertProvider live,
+            ILogger<EagerIssueAtStartup> logger)
         {
-            _config = cfg; _live = live;
+            _config = config;
+            _live = live;
+            _logger = logger;
         }
 
-        public Task StartAsync(CancellationToken ct)
+        public async Task StartAsync(CancellationToken ct)
         {
-            var cfg = _config.Get();
+            var config = _config.Get();
 
-            // 1) Explicit domains
-            var hosts = cfg.Domains
-                .Where(d => bool.TryParse(d.UseSSL, out var ok) && ok)
-                .Select(d => (d.Domain ?? "").Trim().ToLowerInvariant())
-                .Where(h => !string.IsNullOrWhiteSpace(h))
-                .Distinct();
+            var hosts = config.Domains
+                .Where(domain => bool.TryParse(domain.UseSSL, out var enabled) && enabled)
+                .Select(domain => CertificateInspector.NormalizeHost(domain.Domain ?? string.Empty))
+                .Where(host => host.Length != 0)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var h in hosts)
-                _live.TryQueueIssueIfMissing(h);
+            foreach (var host in _live.EnumerateAuthorizedIpnsHosts())
+                hosts.Add(host);
 
-            // 2) Star-ish ipns authorized subdomains
-            foreach (var h in _live.EnumerateAuthorizedIpnsHosts())
-                _live.TryQueueIssueIfMissing(h);
-
-            return Task.CompletedTask;
+            try
+            {
+                await Task.WhenAll(
+                    hosts.Select(host => _live.WarmCacheAsync(host, ct)))
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[TLS] Failed to hydrate the certificate cache at startup");
+            }
         }
 
         public Task StopAsync(CancellationToken ct) => Task.CompletedTask;
     }
-
 }
