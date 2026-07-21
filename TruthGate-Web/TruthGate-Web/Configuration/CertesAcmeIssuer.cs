@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
@@ -51,7 +50,10 @@ namespace TruthGate_Web.Configuration
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogDebug(ex, "ACME[{Dir}] account already registered or reusable", Label);
+                    _logger.LogDebug(
+                        ex,
+                        "ACME[{Dir}] existing account registration will be reused",
+                        Label);
                 }
 
                 var order = await acme.NewOrder(new[] { host }).ConfigureAwait(false);
@@ -65,6 +67,7 @@ namespace TruthGate_Web.Configuration
                     var keyAuthorization = http.KeyAuthz;
                     var url = $"http://{host}/.well-known/acme-challenge/{token}";
 
+                    // Publish challenge content before either our preflight or the CA can request it.
                     _challengeStore.Put(token, keyAuthorization, TimeSpan.FromMinutes(10));
                     try
                     {
@@ -113,17 +116,18 @@ namespace TruthGate_Web.Configuration
                 var certificateKey = KeyFactory.NewKey(KeyAlgorithm.ES256);
                 var csrInfo = new CsrInfo { CommonName = host };
 
-                var orderDeadline = DateTimeOffset.UtcNow + TimeSpan.FromMinutes(2);
+                var deadline = DateTimeOffset.UtcNow + TimeSpan.FromMinutes(2);
                 var orderResource = await order.Resource().ConfigureAwait(false);
 
                 while (orderResource.Status is OrderStatus.Pending or OrderStatus.Processing)
                 {
                     ct.ThrowIfCancellationRequested();
 
-                    if (DateTimeOffset.UtcNow > orderDeadline)
+                    if (DateTimeOffset.UtcNow > deadline)
                     {
                         throw new TimeoutException(
-                            $"ACME order not ready for {host} (status={orderResource.Status}).");
+                            $"ACME order not ready for {host} " +
+                            $"(status={orderResource.Status}).");
                     }
 
                     await Task.Delay(1000, ct).ConfigureAwait(false);
@@ -133,7 +137,7 @@ namespace TruthGate_Web.Configuration
                 if (orderResource.Status != OrderStatus.Valid)
                     await order.Finalize(csrInfo, certificateKey).ConfigureAwait(false);
 
-                orderDeadline = DateTimeOffset.UtcNow + TimeSpan.FromMinutes(2);
+                deadline = DateTimeOffset.UtcNow + TimeSpan.FromMinutes(2);
                 orderResource = await order.Resource().ConfigureAwait(false);
 
                 while (orderResource.Status is
@@ -143,7 +147,7 @@ namespace TruthGate_Web.Configuration
                 {
                     ct.ThrowIfCancellationRequested();
 
-                    if (DateTimeOffset.UtcNow > orderDeadline)
+                    if (DateTimeOffset.UtcNow > deadline)
                     {
                         throw new TimeoutException(
                             $"ACME finalize timed out for {host} " +
@@ -167,7 +171,6 @@ namespace TruthGate_Web.Configuration
                 using var leafPublic = X509CertificateLoader.LoadCertificate(leafDer);
                 using var ecdsa = ECDsa.Create();
                 ecdsa.ImportPkcs8PrivateKey(certificateKey.ToDer(), out _);
-
                 using var leafWithKey = leafPublic.CopyWithPrivateKey(ecdsa);
 
                 var pfxBuilder = new Pkcs12Builder();
@@ -181,7 +184,6 @@ namespace TruthGate_Web.Configuration
                         PbeEncryptionAlgorithm.Aes256Cbc,
                         HashAlgorithmName.SHA256,
                         100_000));
-
                 pfxBuilder.AddSafeContentsUnencrypted(leafBag);
 
                 if (issuersDer.Count > 0)
@@ -305,6 +307,9 @@ namespace TruthGate_Web.Configuration
 
             try
             {
+                var bytes = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)
+                    .GetBytes(content);
+
                 await using (var stream = new FileStream(
                     tempPath,
                     FileMode.CreateNew,
@@ -313,43 +318,13 @@ namespace TruthGate_Web.Configuration
                     bufferSize: 4096,
                     FileOptions.Asynchronous | FileOptions.WriteThrough))
                 {
-                    await using var writer = new StreamWriter(
-                        stream,
-                        new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-                        bufferSize: 4096,
-                        leaveOpen: true);
-
-                    await writer.WriteAsync(content.AsMemory(), ct).ConfigureAwait(false);
-                    await writer.FlushAsync(ct).ConfigureAwait(false);
+                    await stream.WriteAsync(bytes, ct).ConfigureAwait(false);
+                    await stream.FlushAsync(ct).ConfigureAwait(false);
                     stream.Flush(flushToDisk: true);
                 }
 
                 HardenFile(tempPath);
-
-                if (File.Exists(path))
-                {
-                    try
-                    {
-                        File.Replace(
-                            tempPath,
-                            path,
-                            destinationBackupFileName: null,
-                            ignoreMetadataErrors: true);
-                    }
-                    catch (PlatformNotSupportedException)
-                    {
-                        File.Move(tempPath, path, overwrite: true);
-                    }
-                    catch (IOException)
-                    {
-                        File.Move(tempPath, path, overwrite: true);
-                    }
-                }
-                else
-                {
-                    File.Move(tempPath, path);
-                }
-
+                ReplaceAtomically(tempPath, path);
                 HardenFile(path);
             }
             finally
@@ -365,16 +340,42 @@ namespace TruthGate_Web.Configuration
             }
         }
 
+        private static void ReplaceAtomically(string tempPath, string destinationPath)
+        {
+            if (!File.Exists(destinationPath))
+            {
+                File.Move(tempPath, destinationPath);
+                return;
+            }
+
+            try
+            {
+                File.Replace(
+                    tempPath,
+                    destinationPath,
+                    destinationBackupFileName: null,
+                    ignoreMetadataErrors: true);
+            }
+            catch (PlatformNotSupportedException)
+            {
+                File.Move(tempPath, destinationPath, overwrite: true);
+            }
+            catch (IOException)
+            {
+                File.Move(tempPath, destinationPath, overwrite: true);
+            }
+        }
+
         private static void EnsureDirectory(string directory)
         {
-            Directory.CreateDirectory(directory);
+            System.IO.Directory.CreateDirectory(directory);
 
             if (OperatingSystem.IsWindows())
                 return;
 
             try
             {
-                Directory.SetUnixFileMode(
+                File.SetUnixFileMode(
                     directory,
                     UnixFileMode.UserRead |
                     UnixFileMode.UserWrite |
