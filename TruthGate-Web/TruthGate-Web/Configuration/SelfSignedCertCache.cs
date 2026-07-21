@@ -247,7 +247,7 @@ namespace TruthGate_Web.Configuration
 
             try
             {
-                Directory.SetUnixFileMode(
+                File.SetUnixFileMode(
                     directory,
                     UnixFileMode.UserRead |
                     UnixFileMode.UserWrite |
