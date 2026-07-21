@@ -163,7 +163,7 @@ namespace TruthGate_Web.Configuration
 
             try
             {
-                Directory.SetUnixFileMode(
+                File.SetUnixFileMode(
                     _dir,
                     UnixFileMode.UserRead |
                     UnixFileMode.UserWrite |
