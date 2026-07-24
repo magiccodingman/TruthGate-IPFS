@@ -1,0 +1,120 @@
+name: Docker repository migration
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-repo-migration-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  migrate-kubo-repository:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: amd64
+            runner: ubuntu-24.04
+          - architecture: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build production image (${{ matrix.architecture }})
+        run: |
+          docker build \
+            --platform linux/${{ matrix.architecture }} \
+            --target production \
+            --tag truthgate-ipfs:migration-test-${{ matrix.architecture }} \
+            .
+
+      - name: Create a Kubo 0.36 repository and verify automatic migration
+        shell: bash
+        run: |
+          exec > >(tee repo-migration-${{ matrix.architecture }}.log) 2>&1
+          set -Eeuo pipefail
+
+          export TRUTHGATE_IMAGE=truthgate-ipfs:migration-test-${{ matrix.architecture }}
+          export TRUTHGATE_HTTP_PORT=18080
+          export TRUTHGATE_HTTPS_PORT=18443
+          export IPFS_SWARM_PORT=14001
+          export TRUTHGATE_KUBO_PUBLIC_IPV4=off
+          export TRUTHGATE_KUBO_PUBLIC_IPV6=off
+          export TRUTHGATE_DATA_HOST_PATH=./.ci-migration/truthgate
+          export IPFS_REPO_HOST_PATH=./.ci-migration/ipfs/repo
+          export IPFS_BLOCKS_HOST_PATH=./.ci-migration/ipfs/blocks
+
+          cleanup() {
+            docker compose logs --no-color 2>/dev/null || true
+            docker compose down --remove-orphans 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          rm -rf .ci-migration
+          mkdir -p \
+            .ci-migration/truthgate \
+            .ci-migration/ipfs/repo \
+            .ci-migration/ipfs/blocks
+
+          docker run --rm \
+            --user 0:0 \
+            --entrypoint /usr/local/bin/ipfs \
+            --env IPFS_PATH=/data/ipfs/repo \
+            --volume "$PWD/.ci-migration/ipfs/repo:/data/ipfs/repo" \
+            --volume "$PWD/.ci-migration/ipfs/blocks:/data/ipfs/repo/blocks" \
+            ipfs/kubo:v0.36.0 \
+            init --profile server
+
+          test "$(tr -d '[:space:]' < .ci-migration/ipfs/repo/version)" = "16"
+          peer_id_before="$(jq -r '.Identity.PeerID' .ci-migration/ipfs/repo/config)"
+          test -n "${peer_id_before}"
+
+          sudo chown -R 1000:1000 .ci-migration
+
+          docker compose up --detach --no-build
+
+          for attempt in $(seq 1 60); do
+            state="$(docker inspect --format '{{.State.Status}}' truthgate)"
+            health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' truthgate)"
+            echo "Attempt ${attempt}: state=${state} health=${health}"
+
+            if [[ "${health}" == "healthy" ]]; then
+              break
+            fi
+
+            if [[ "${state}" == "exited" || "${health}" == "unhealthy" ]]; then
+              docker compose logs --no-color
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+          test "$(docker inspect --format '{{.State.Health.Status}}' truthgate)" = "healthy"
+          test "$(docker exec truthgate tr -d '[:space:]' </data/ipfs/repo/version)" = "18"
+
+          peer_id_after="$(docker exec truthgate ipfs config Identity.PeerID)"
+          test "${peer_id_before}" = "${peer_id_after}"
+
+          docker compose logs --no-color \
+            | grep -F "Migrating Kubo repository from version 16 to 18 before applying managed configuration."
+          docker compose logs --no-color \
+            | grep -F "Kubo repository migration completed at version 18."
+
+          test "$(docker exec truthgate ipfs config Routing.Type)" = "dhtserver"
+          test "$(docker exec truthgate ipfs config Provide.Strategy)" = "all"
+          docker exec truthgate truthgate-kubo-status
+
+      - name: Upload migration diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repo-migration-${{ matrix.architecture }}
+          path: repo-migration-${{ matrix.architecture }}.log
+          if-no-files-found: ignore
