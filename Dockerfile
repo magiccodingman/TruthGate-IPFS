@@ -7,17 +7,22 @@ ARG TRUTHGATE_GID=1000
 
 FROM ipfs/kubo:${KUBO_VERSION} AS kubo
 
-FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION}-resolute AS build
+# Compile on the builder's native CPU while targeting the requested image
+# architecture. This avoids running the full .NET build under QEMU for ARM64.
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION}-resolute AS build
+ARG TARGETARCH
 WORKDIR /src
 
 COPY TruthGate-Web/TruthGate-Web/TruthGate-Web.csproj TruthGate-Web/TruthGate-Web/
 COPY TruthGate-Web/TruthGate-Web.Client/TruthGate-Web.Client.csproj TruthGate-Web/TruthGate-Web.Client/
-RUN dotnet restore TruthGate-Web/TruthGate-Web/TruthGate-Web.csproj
+RUN dotnet restore TruthGate-Web/TruthGate-Web/TruthGate-Web.csproj --arch "${TARGETARCH}"
 
 COPY . .
 RUN dotnet publish TruthGate-Web/TruthGate-Web/TruthGate-Web.csproj \
     --configuration Release \
+    --arch "${TARGETARCH}" \
     --no-restore \
+    --no-self-contained \
     --output /out \
     /p:UseAppHost=false
 
