@@ -1,0 +1,123 @@
+name: Docker appliance
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: docker-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME: ghcr.io/magiccodingman/truthgate-ipfs
+
+jobs:
+  validate-compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate production Compose
+        run: docker compose -f compose.yaml config
+      - name: Validate development override
+        run: docker compose -f compose.yaml -f compose.dev.yaml config
+
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build production image (AMD64)
+        run: docker build --target production --tag truthgate-ipfs:test .
+
+      - name: Build development image (AMD64)
+        run: docker build --target development --tag truthgate-ipfs:dev-test .
+
+      - name: Start appliance and wait for health
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          trap 'docker compose logs --no-color || true; docker compose down --remove-orphans || true' EXIT
+
+          mkdir -p .ci-data/truthgate .ci-data/ipfs/repo .ci-data/ipfs/blocks
+
+          TRUTHGATE_IMAGE=truthgate-ipfs:test \
+          TRUTHGATE_HTTP_PORT=18080 \
+          TRUTHGATE_HTTPS_PORT=18443 \
+          IPFS_SWARM_PORT=14001 \
+          TRUTHGATE_DATA_HOST_PATH=./.ci-data/truthgate \
+          IPFS_REPO_HOST_PATH=./.ci-data/ipfs/repo \
+          IPFS_BLOCKS_HOST_PATH=./.ci-data/ipfs/blocks \
+          docker compose up --detach --no-build
+
+          for attempt in $(seq 1 60); do
+            status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' truthgate)"
+            if [[ "${status}" == "healthy" ]]; then
+              docker compose logs --no-color
+              exit 0
+            fi
+
+            if [[ "${status}" == "unhealthy" ]]; then
+              echo "TruthGate became unhealthy."
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+          echo "TruthGate did not become healthy in time."
+          exit 1
+
+  build-and-publish:
+    needs:
+      - validate-compose
+      - smoke-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=master,enable=${{ github.ref == 'refs/heads/master' }}
+            type=sha,prefix=sha-
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Build and optionally publish AMD64 + ARM64
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: production
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
