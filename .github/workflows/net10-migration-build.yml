@@ -28,4 +28,24 @@ jobs:
         run: dotnet restore TruthGate-IPFS.sln
 
       - name: Build
-        run: dotnet build TruthGate-IPFS.sln --configuration Release --no-restore
+        id: build
+        shell: bash
+        run: |
+          set +e
+          dotnet build TruthGate-IPFS.sln --configuration Release --no-restore > net10-build.log 2>&1
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          tail -n 200 net10-build.log
+          exit 0
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: net10-build-log
+          path: net10-build.log
+          if-no-files-found: error
+
+      - name: Report build failure
+        if: steps.build.outputs.status != '0'
+        run: exit 1
