@@ -32,16 +32,16 @@ setting() {
 }
 
 set_string() {
-    as_truthgate ipfs config "$1" --json "$(jq -cn --arg value "$2" '$value')"
+    as_truthgate ipfs config --json "$1" "$(jq -cn --arg value "$2" '$value')"
 }
 
 set_json() {
-    as_truthgate ipfs config "$1" --json "$2"
+    as_truthgate ipfs config --json "$1" "$2"
 }
 
 ensure_array_value() {
     local key="$1" item="$2" current compact updated
-    current="$(as_truthgate ipfs config "${key}" --json 2>/dev/null || printf '[]')"
+    current="$(as_truthgate ipfs config --json "${key}" 2>/dev/null || printf '[]')"
     compact="$(jq -c . <<<"${current}")"
     updated="$(jq -c --arg item "${item}" \
         'if type != "array" then [$item] elif index($item) then . else . + [$item] end' \
@@ -268,7 +268,7 @@ if [[ -n "${public_ipv6}" ]]; then
 fi
 
 managed_state="${TRUTHGATE_STATE_PATH}/kubo-managed-append-announce.json"
-current="$(as_truthgate ipfs config Addresses.AppendAnnounce --json 2>/dev/null || printf '[]')"
+current="$(as_truthgate ipfs config --json Addresses.AppendAnnounce 2>/dev/null || printf '[]')"
 previous='[]'
 if [[ -s "${managed_state}" ]]; then
     previous="$(cat "${managed_state}")"
@@ -309,7 +309,7 @@ set_string Addresses.Gateway /ip4/127.0.0.1/tcp/9010
 
 log "Kubo server configuration:"
 log "  Routing.Type: $(as_truthgate ipfs config Routing.Type)"
-log "  Swarm listeners: $(as_truthgate ipfs config Addresses.Swarm --json | jq -c .)"
+log "  Swarm listeners: $(as_truthgate ipfs config --json Addresses.Swarm | jq -c .)"
 log "  Managed public announce IPv4: ${public_ipv4:-disabled or unavailable}"
 log "  Managed public announce IPv6: ${public_ipv6:-disabled or unavailable}"
 log "  Public announce port: ${announce_port}"
