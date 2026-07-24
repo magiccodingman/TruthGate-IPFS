@@ -166,7 +166,7 @@ jobs:
             docker exec truthgate test -s /data/truthgate/config/kubo-overrides.json
 
             docker exec truthgate \
-              ipfs config Addresses.Swarm --json \
+              ipfs config --json Addresses.Swarm \
               | jq -e '
                   index("/ip4/0.0.0.0/tcp/4001") and
                   index("/ip6/::/tcp/4001") and
