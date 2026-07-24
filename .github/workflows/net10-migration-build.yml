@@ -16,11 +16,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repair branch
         uses: actions/checkout@v4
+        with:
+          ref: agent/net10-mudblazor-migration
 
       - name: Apply compiler-driven migration fixes
-        if: github.event_name == 'push' && github.ref == 'refs/heads/agent/net10-mudblazor-migration'
         shell: bash
         run: |
           python3 <<'PY'
@@ -78,7 +79,7 @@ jobs:
                     TruthGate-Web/TruthGate-Web/Components/Pages/Settings/ApiKeys.razor \
                     TruthGate-Web/TruthGate-Web/Components/Pages/Settings/IpBansPage.razor
             git commit -m "Fix MudBlazor 9 chart, dialog, and grid APIs"
-            git push origin "HEAD:${GITHUB_REF_NAME}"
+            git push origin HEAD:agent/net10-mudblazor-migration
           fi
 
       - name: Setup .NET 10
