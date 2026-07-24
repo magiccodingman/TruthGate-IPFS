@@ -9,7 +9,7 @@ config_value() {
 }
 
 config_json() {
-    ipfs config "$1" --json 2>/dev/null | jq -c . || printf '<unset>'
+    ipfs config --json "$1" 2>/dev/null | jq -c . || printf '<unset>'
 }
 
 printf 'TruthGate Kubo status\n'
