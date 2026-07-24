@@ -55,6 +55,35 @@ install -d -m 0750 -o "${truthgate_user}" -g "${truthgate_group}" \
     "${blocks_directory}" \
     "${TMPDIR}"
 
+# Named volumes are created as root-owned directories. Development tools such as
+# NuGet run as the non-root truthgate user, so initialize the complete NuGet home
+# (including its configuration directory) before dropping privileges.
+if [[ "${mode}" == "development" ]]; then
+    : "${HOME:=/home/truthgate}"
+    : "${DOTNET_CLI_HOME:=${HOME}}"
+    : "${NUGET_PACKAGES:=${HOME}/.nuget/packages}"
+    : "${NUGET_HTTP_CACHE_PATH:=${HOME}/.nuget/http-cache}"
+
+    export HOME DOTNET_CLI_HOME NUGET_PACKAGES NUGET_HTTP_CACHE_PATH
+
+    nuget_root="${HOME}/.nuget"
+    nuget_config_directory="${nuget_root}/NuGet"
+
+    install -d -m 0750 -o "${truthgate_user}" -g "${truthgate_group}" \
+        "${HOME}" \
+        "${nuget_root}" \
+        "${nuget_config_directory}" \
+        "${NUGET_PACKAGES}" \
+        "${NUGET_HTTP_CACHE_PATH}"
+
+    chown "${truthgate_user}:${truthgate_group}" \
+        "${HOME}" \
+        "${nuget_root}" \
+        "${nuget_config_directory}" \
+        "${NUGET_PACKAGES}" \
+        "${NUGET_HTTP_CACHE_PATH}"
+fi
+
 # The default Compose layout mounts the repo and blockstore separately. Changing
 # ownership on the mount roots is cheap and avoids recursively walking a large
 # existing blockstore on every container start.
