@@ -71,11 +71,11 @@ jobs:
             ipfs/kubo:v0.36.0 \
             init --profile server
 
+          sudo chown -R 1000:1000 .ci-migration
+
           test "$(tr -d '[:space:]' < .ci-migration/ipfs/repo/version)" = "16"
           peer_id_before="$(jq -r '.Identity.PeerID' .ci-migration/ipfs/repo/config)"
           test -n "${peer_id_before}"
-
-          sudo chown -R 1000:1000 .ci-migration
 
           docker compose up --detach --no-build
 
