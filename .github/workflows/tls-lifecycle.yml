@@ -26,6 +26,9 @@ jobs:
       - name: Restore solution
         run: dotnet restore TruthGate-IPFS.sln
 
+      - name: Restore TLS tests
+        run: dotnet restore TruthGate-Web/TruthGate-Web.Tests/TruthGate-Web.Tests.csproj
+
       - name: Build solution
         run: dotnet build TruthGate-IPFS.sln --no-restore --configuration Release
 
@@ -43,8 +46,6 @@ jobs:
             > tls-test-output.log 2>&1
           status=$?
           echo "status=$status" >> "$GITHUB_OUTPUT"
-          echo "Test output directory:"
-          find TruthGate-Web/TruthGate-Web.Tests/bin/Release/net10.0 -maxdepth 1 -type f -printf '%f\n' | sort
           tail -n 200 tls-test-output.log
           exit 0
 
