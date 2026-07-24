@@ -35,6 +35,7 @@ RUN apt-get update \
         ca-certificates \
         curl \
         gosu \
+        jq \
         tini \
     && rm -rf /var/lib/apt/lists/* \
     && if ! getent group "${TRUTHGATE_GID}" >/dev/null; then groupadd --gid "${TRUTHGATE_GID}" truthgate; fi \
@@ -49,6 +50,7 @@ RUN apt-get update \
 COPY --from=kubo /usr/local/bin/ipfs /usr/local/bin/ipfs
 COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/truthgate-entrypoint
 COPY --chmod=0755 docker/healthcheck.sh /usr/local/bin/truthgate-healthcheck
+COPY --chmod=0755 docker/kubo-status.sh /usr/local/bin/truthgate-kubo-status
 
 ENV ASPNETCORE_ENVIRONMENT=Production \
     DOTNET_ENVIRONMENT=Production \
@@ -60,6 +62,8 @@ ENV ASPNETCORE_ENVIRONMENT=Production \
     TRUTHGATE_CERT_PATH=/data/truthgate/certificates \
     TRUTHGATE_CONFIG_PATH=/data/truthgate/config/config.json \
     TRUTHGATE_DATABASE_PATH=/data/truthgate/database \
+    TRUTHGATE_KUBO_OVERRIDES_PATH=/data/truthgate/config/kubo-overrides.json \
+    TRUTHGATE_KUBO_SETTINGS_PATH=/data/truthgate/config/kubo-settings.json \
     TRUTHGATE_STATE_PATH=/data/truthgate/state \
     TRUTHGATE_HEALTH_URL=https://127.0.0.1:443/
 
@@ -84,6 +88,7 @@ RUN apt-get update \
         curl \
         git \
         gosu \
+        jq \
         tini \
     && rm -rf /var/lib/apt/lists/* \
     && if ! getent group "${TRUTHGATE_GID}" >/dev/null; then groupadd --gid "${TRUTHGATE_GID}" truthgate; fi \
@@ -99,6 +104,7 @@ RUN apt-get update \
 COPY --from=kubo /usr/local/bin/ipfs /usr/local/bin/ipfs
 COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/truthgate-entrypoint
 COPY --chmod=0755 docker/healthcheck.sh /usr/local/bin/truthgate-healthcheck
+COPY --chmod=0755 docker/kubo-status.sh /usr/local/bin/truthgate-kubo-status
 
 ENV ASPNETCORE_ENVIRONMENT=Development \
     DOTNET_ENVIRONMENT=Development \
@@ -112,6 +118,8 @@ ENV ASPNETCORE_ENVIRONMENT=Development \
     TRUTHGATE_CONFIG_PATH=/data/truthgate/config/config.json \
     TRUTHGATE_DATABASE_PATH=/data/truthgate/database \
     TRUTHGATE_DEV_PROJECT=/workspace/TruthGate-Web/TruthGate-Web/TruthGate-Web.csproj \
+    TRUTHGATE_KUBO_OVERRIDES_PATH=/data/truthgate/config/kubo-overrides.json \
+    TRUTHGATE_KUBO_SETTINGS_PATH=/data/truthgate/config/kubo-settings.json \
     TRUTHGATE_STATE_PATH=/data/truthgate/state \
     TRUTHGATE_HEALTH_URL=http://127.0.0.1:80/
 
