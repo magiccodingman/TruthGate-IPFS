@@ -106,11 +106,12 @@ Rider can attach to the running development container or use the container's
 SDK. The source directory is mounted directly, so normal edits trigger
 `dotnet watch`.
 
-### Rider single-file Compose configuration
+### Generated single-file development configuration
 
-Some Rider versions fail while discovering services from multiple Compose
-files. `compose.rider.yaml` is the merged development configuration for that
-case. Regenerate it from `compose.yaml` and `compose.dev.yaml` before launch.
+Some tools and IDEs fail while discovering services from multiple Compose
+files. `compose.dev.generated.yaml` is the fully merged development
+configuration for that case. It is generated from `compose.yaml` and
+`compose.dev.yaml` and should not be edited directly.
 
 PowerShell 7 on Windows, Linux, or macOS:
 
@@ -124,10 +125,11 @@ Bash on Linux or macOS:
 bash ./docker/generate-rider-compose.sh
 ```
 
-Both scripts write to a temporary file and replace `compose.rider.yaml` only
-after `docker compose config` succeeds. In Rider, use `compose.rider.yaml` as
-the sole Compose file and add the appropriate command as an External Tool in
-the run configuration's **Before launch** tasks.
+Both scripts write to a temporary file and replace
+`compose.dev.generated.yaml` only after `docker compose config` succeeds. In
+Rider, use `compose.dev.generated.yaml` as the sole Compose file and add the
+appropriate generator as an External Tool in the run configuration's
+**Before launch** tasks.
 
 ## Configuration
 
