@@ -84,6 +84,7 @@ jobs:
       - name: Start, replace, and revalidate the appliance
         shell: bash
         run: |
+          exec > >(tee runtime-smoke-${{ matrix.architecture }}.log) 2>&1
           set -Eeuo pipefail
 
           export TRUTHGATE_IMAGE=truthgate-ipfs:test-${{ matrix.architecture }}
@@ -125,15 +126,23 @@ jobs:
               | python3 -c 'import json, sys; print(json.load(sys.stdin)["ID"])'
           }
 
+          read_bootstrap_hash() {
+            docker exec truthgate \
+              sha256sum /data/truthgate/state/bootstrap-admin-password \
+              | cut -d' ' -f1
+          }
+
           mkdir -p .ci-data/truthgate .ci-data/ipfs/repo .ci-data/ipfs/blocks
 
           docker compose up --detach --no-build
           wait_for_health
 
-          test -s .ci-data/ipfs/repo/config
-          test -s .ci-data/truthgate/state/bootstrap-admin-password
+          # Read protected state from inside the container. The host runner is
+          # intentionally unable to inspect the bootstrap secret directly.
+          docker exec truthgate test -s /data/ipfs/repo/config
+          docker exec truthgate test -s /data/truthgate/state/bootstrap-admin-password
           peer_id_before="$(read_peer_id)"
-          bootstrap_hash_before="$(sha256sum .ci-data/truthgate/state/bootstrap-admin-password | cut -d' ' -f1)"
+          bootstrap_hash_before="$(read_bootstrap_hash)"
 
           # Replace the container while retaining only the documented bind-mounted
           # state. The Kubo identity and first-run credential must remain stable.
@@ -141,13 +150,23 @@ jobs:
           docker compose up --detach --no-build
           wait_for_health
 
+          docker exec truthgate test -s /data/ipfs/repo/config
+          docker exec truthgate test -s /data/truthgate/state/bootstrap-admin-password
           peer_id_after="$(read_peer_id)"
-          bootstrap_hash_after="$(sha256sum .ci-data/truthgate/state/bootstrap-admin-password | cut -d' ' -f1)"
+          bootstrap_hash_after="$(read_bootstrap_hash)"
 
           test "${peer_id_before}" = "${peer_id_after}"
           test "${bootstrap_hash_before}" = "${bootstrap_hash_after}"
 
           docker compose logs --no-color
+
+      - name: Upload runtime diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-smoke-${{ matrix.architecture }}
+          path: runtime-smoke-${{ matrix.architecture }}.log
+          if-no-files-found: ignore
 
   build-and-publish:
     if: github.event_name != 'pull_request'
