@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using System.IO;
 using System.Net;
@@ -19,6 +19,16 @@ namespace TruthGate_Web.Middleware
 
         private static async Task<RunOnceResult> RunOnce(HttpContext ctx, Func<Task> next)
         {
+            // A mapped hostname can serve both the public IPFS site and TruthGate's
+            // administrator portal. Anonymous visitors receive the mapped site;
+            // authenticated users stay inside the real application, including its
+            // Blazor framework, SignalR circuit, static assets, and dashboard routes.
+            if (ctx.User?.Identity?.IsAuthenticated == true)
+            {
+                await next();
+                return new RunOnceResult(Handled: true, RetryCandidate: false, Cid: null, MfsPath: null);
+            }
+
             var mfsPath = DomainHelpers.GetMappedDomain(ctx);
             if (string.IsNullOrWhiteSpace(mfsPath))
             {
