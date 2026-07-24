@@ -36,10 +36,34 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build production image (AMD64)
-        run: docker build --target production --tag truthgate-ipfs:test .
+        shell: bash
+        run: |
+          set -o pipefail
+          docker build --progress=plain --target production --tag truthgate-ipfs:test . 2>&1 \
+            | tee production-image-build.log
+
+      - name: Upload production build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-image-build
+          path: production-image-build.log
+          if-no-files-found: error
 
       - name: Build development image (AMD64)
-        run: docker build --target development --tag truthgate-ipfs:dev-test .
+        shell: bash
+        run: |
+          set -o pipefail
+          docker build --progress=plain --target development --tag truthgate-ipfs:dev-test . 2>&1 \
+            | tee development-image-build.log
+
+      - name: Upload development build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: development-image-build
+          path: development-image-build.log
+          if-no-files-found: ignore
 
       - name: Start appliance and wait for health
         shell: bash
