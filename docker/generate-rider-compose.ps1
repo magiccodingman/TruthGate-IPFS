@@ -4,8 +4,8 @@ Set-StrictMode -Version Latest
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $composeFile = Join-Path $repositoryRoot 'compose.yaml'
 $devComposeFile = Join-Path $repositoryRoot 'compose.dev.yaml'
-$outputFile = Join-Path $repositoryRoot 'compose.rider.yaml'
-$tempFile = Join-Path $repositoryRoot ('.compose.rider.{0}.tmp' -f [Guid]::NewGuid().ToString('N'))
+$outputFile = Join-Path $repositoryRoot 'compose.dev.generated.yaml'
+$tempFile = Join-Path $repositoryRoot ('.compose.dev.generated.{0}.tmp' -f [Guid]::NewGuid().ToString('N'))
 
 try {
     Push-Location $repositoryRoot
