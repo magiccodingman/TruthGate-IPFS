@@ -33,32 +33,9 @@ jobs:
         run: dotnet build TruthGate-IPFS.sln --no-restore --configuration Release
 
       - name: Test TLS lifecycle
-        id: test
-        shell: bash
-        run: |
-          set +e
-          dotnet test \
-            TruthGate-Web/TruthGate-Web.Tests/TruthGate-Web.Tests.csproj \
-            --no-restore \
-            --configuration Release \
-            --logger "console;verbosity=normal" \
-            --diag tls-vstest-diag.log \
-            > tls-test-output.log 2>&1
-          status=$?
-          echo "status=$status" >> "$GITHUB_OUTPUT"
-          tail -n 200 tls-test-output.log
-          exit 0
-
-      - name: Upload test diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: tls-test-output
-          path: |
-            tls-test-output.log
-            tls-vstest-diag.log
-          if-no-files-found: error
-
-      - name: Report test failure
-        if: steps.test.outputs.status != '0'
-        run: exit 1
+        run: >-
+          dotnet test
+          TruthGate-Web/TruthGate-Web.Tests/TruthGate-Web.Tests.csproj
+          --no-restore
+          --configuration Release
+          --logger "console;verbosity=normal"
