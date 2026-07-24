@@ -1,4 +1,4 @@
-﻿@using MudBlazor
+@using MudBlazor
 @using System.Text.Json
 @using TruthGate_Web.Utils
 @using TruthGate_Web.Endpoints
@@ -6,7 +6,7 @@
 
 <MudDialog>
     <DialogContent>
-    <MudForm @ref="_form" Model="_model" Validation="Validate">
+    <MudForm @ref="_form" Model="_model">
 
         <MudTextField Label="Name (folder base under /production/pinned)"
                       @bind-Value="_model.Name"
@@ -26,7 +26,7 @@
 
             <!-- Auto Update to New CID -->
             <MudPaper Class="pa-3 mt-3">
-                <MudGrid Spacing="2" AlignItems="AlignItems.Center">
+                <MudGrid Spacing="2" Style="align-items:center;">
                     <!-- Left: control + state chip -->
                     <MudItem xs="12" sm="4" md="4" lg="4" xl="4">
                         <div class="flex items-center justify-between gap-2">
@@ -60,7 +60,7 @@
 
             <!-- Keep Old Versions Pinned -->
             <MudPaper Class="pa-3 mt-3">
-                <MudGrid Spacing="2" AlignItems="AlignItems.Center">
+                <MudGrid Spacing="2" Style="align-items:center;">
                     <!-- Left: control + state chip -->
                     <MudItem xs="12" sm="4" md="4" lg="4" xl="4">
                         <div class="flex items-center justify-between gap-2">
@@ -193,20 +193,23 @@
         _model.KeepOldCidPinned = InitialKeepOldCidPinned;
     }
 
-    private IEnumerable<string> Validate()
+    private string? ValidateName(string? value)
     {
-        _error = null;
+        if (string.IsNullOrWhiteSpace(value))
+            return "Name is required.";
 
-        if (string.IsNullOrWhiteSpace(_model.Name))
-            yield return "Name is required.";
-        if (string.IsNullOrWhiteSpace(_model.Key))
-            yield return "IPNS key is required.";
+        return IpfsGateway.ToSafeLeaf(value) is null ? "Invalid name." : null;
+    }
 
-        var leaf = IpfsGateway.ToSafeLeaf(_model.Name);
-        if (leaf is null)
-            yield return "Invalid name.";
-        if (!_model.Key.StartsWith("k51") && !_model.Key.StartsWith("/ipns/"))
-            yield return "IPNS Key should look like k51… or /ipns/k51…";
+    private static string? ValidateKey(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "IPNS key is required.";
+
+        return value.StartsWith("k51", StringComparison.OrdinalIgnoreCase) ||
+               value.StartsWith("/ipns/k51", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : "IPNS Key should look like k51… or /ipns/k51…";
     }
 
     private void Cancel() => MudDialog.Cancel();
@@ -293,9 +296,9 @@
         return null;
     }
 
-    private async void Submit()
+    private async Task Submit()
     {
-        await _form.Validate();
+        await _form.ValidateAsync();
         if (!_form.IsValid) return;
 
         // Name leaf (immutable on edit)

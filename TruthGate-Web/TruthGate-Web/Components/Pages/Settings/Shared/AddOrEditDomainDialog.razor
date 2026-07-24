@@ -3,20 +3,20 @@
 
 <MudDialog>
     <DialogContent>
-        <MudForm @ref="_form" Model="_model" Validation="@Validate">
+        <MudForm @ref="_form" Model="_model">
             <MudTextField Label="Domain (e.g., example.com)"
-            @bind-Value="_model.Domain"
-            Immediate="true"
-            Required="true"
-            For="@(()=>_model.Domain)" />
+                          @bind-Value="_model.Domain"
+                          Immediate="true"
+                          Required="true"
+                          RequiredError="Domain is required."
+                          For="@(() => _model.Domain)" />
 
             <div class="mt-3">
                 <div class="mt-3">
                     <MudSwitch T="bool"
-                    @bind-Value="_model.UseSSL"
-                    Color="Color.Primary"
-                    Label="@(_model.UseSSL ? "Enabled" : "Disabled")"
-                    />
+                               @bind-Value="_model.UseSSL"
+                               Color="Color.Primary"
+                               Label="@(_model.UseSSL ? "Enabled" : "Disabled")" />
                 </div>
                 <MudText Class="ml-2" Typo="Typo.body2">
                     When enabled, TruthGate provisions a valid Let’s Encrypt certificate for this domain.
@@ -25,15 +25,14 @@
             </div>
 
             <MudTextField Label="Redirect URL"
-            @bind-Value="_model.RedirectUrl"
-            Immediate="true"
-            Required="false"
-            For="@(()=>_model.RedirectUrl)" />
+                          @bind-Value="_model.RedirectUrl"
+                          Immediate="true"
+                          Required="false"
+                          For="@(() => _model.RedirectUrl)" />
             <MudText Class="ml-2" Typo="Typo.body2">
                 Leave empty to serve this domain normally.
                 If a Redirect URL is set, all visitors will be instantly redirected there instead.
             </MudText>
-
 
             @if (!string.IsNullOrEmpty(_error))
             {
@@ -85,14 +84,6 @@
         public string? RedirectUrl { get; set; }
     }
 
-    private IEnumerable<string> Validate()
-    {
-        _error = null;
-
-        if (string.IsNullOrWhiteSpace(_model.Domain))
-            yield return "Domain is required.";
-    }
-
     private void Cancel() => MudDialog.Cancel();
 
     [Inject] IHttpClientFactory HttpFactory { get; set; } = default!;
@@ -100,38 +91,46 @@
 
     private static string ToSafeFolderLeaf(string input)
     {
-        var s = (input ?? "").Trim().ToLowerInvariant();
-        // kill pathy stuff — you only want a single folder leaf here
-        s = s.Replace('\\', '/').Trim('/');
-        if (s.Contains("..")) throw new InvalidOperationException("Invalid domain.");
-        if (string.IsNullOrWhiteSpace(s)) throw new InvalidOperationException("Empty domain.");
-        return s;
+        var value = (input ?? "").Trim().ToLowerInvariant();
+        // Kill path-like input — this must remain a single folder leaf.
+        value = value.Replace('\\', '/').Trim('/');
+        if (value.Contains("..")) throw new InvalidOperationException("Invalid domain.");
+        if (string.IsNullOrWhiteSpace(value)) throw new InvalidOperationException("Empty domain.");
+        return value;
     }
 
     private async Task Submit()
     {
-        await _form.Validate();
+        _error = null;
+        await _form.ValidateAsync();
         if (!_form.IsValid) return;
 
-        var domainLeaf = ToSafeFolderLeaf(_model.Domain);
-        var basePath = "/production/sites";
-        var fullPath = $"{basePath}/{domainLeaf}";
+        try
+        {
+            var domainLeaf = ToSafeFolderLeaf(_model.Domain);
+            const string basePath = "/production/sites";
+            var fullPath = $"{basePath}/{domainLeaf}";
 
-        // Ensure the folder path exists (creates parents as needed), returns final CID
-        var cid = await IpfsGateway.EnsureMfsFolderExistsAsync(fullPath, HttpFactory);
+            // Ensure the folder path exists (creates parents as needed), returning the final CID.
+            _ = await IpfsGateway.EnsureMfsFolderExistsAsync(fullPath, HttpFactory);
 
-        // (Optional) warm/refresh your cached CID for this MFS path, so the rest of your app sees it:
-        var ttl = TimeSpan.FromHours(2);
-        _ = await IpfsGateway.GetCidForMfsPathAsync(
+            // Warm/refresh the cached CID so the rest of the app sees the newly created path.
+            var ttl = TimeSpan.FromHours(2);
+            _ = await IpfsGateway.GetCidForMfsPathAsync(
                 fullPath, HttpFactory, Cache, ttl, IpfsGateway.CacheMode.Refresh);
 
-        var result = new DomainResult
-        {
-            Domain = _model.Domain,   // normalization happens on the page
-            UseSSL = _model.UseSSL,
-            RedirectUrl = _model.RedirectUrl
-        };
+            var result = new DomainResult
+            {
+                Domain = _model.Domain, // Normalization happens on the page.
+                UseSSL = _model.UseSSL,
+                RedirectUrl = _model.RedirectUrl
+            };
 
-        MudDialog.Close(DialogResult.Ok(result));
+            MudDialog.Close(DialogResult.Ok(result));
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
     }
 }

@@ -1,4 +1,4 @@
-﻿@using System.Net
+@using System.Net
 @using Microsoft.EntityFrameworkCore
 @using MudBlazor
 @using TruthGate_Web.Security
@@ -11,7 +11,7 @@
             <MudText Typo="Typo.body1" Class="mb-2">@Message</MudText>
         }
 
-        <MudForm @ref="_form" Validation="Validate">
+        <MudForm @ref="_form">
             <MudStack Spacing="2">
                 <MudTextField @bind-Value="_ip"
                               Label="IP address"
@@ -50,7 +50,7 @@
 
                     <MudText Typo="Typo.subtitle2" Class="mt-2">Recent ban records (DB, latest 10)</MudText>
 
-                    <MudDataGrid T="BanDto" Items="@_recent" Dense="true" Hover="true" Bordered="true" Elevation="0" Sortable="false" Filterable="false">
+                    <MudDataGrid T="BanDto" Items="@_recent" Dense="true" Hover="true" Bordered="true" Elevation="0" SortMode="SortMode.None" Filterable="false">
                         <Columns>
                             <TemplateColumn Title="Created (UTC)">
                                 <CellTemplate>@context.Item.CreatedUtc.ToString("u")</CellTemplate>
@@ -106,25 +106,21 @@
         _ip = InitialIp?.Trim() ?? "";
     }
 
-    private IEnumerable<string> Validate()
+    private string? ValidateIp(string? value)
     {
         _error = null;
-        if (string.IsNullOrWhiteSpace(_ip))
-        {
-            _error = "Please enter an IP address.";
-            yield return _error;
-            yield break;
-        }
-        if (!IPAddress.TryParse(_ip, out _))
-        {
-            _error = "Invalid IP format (v4 or v6 required).";
-            yield return _error;
-        }
+        if (string.IsNullOrWhiteSpace(value))
+            return _error = "Please enter an IP address.";
+
+        if (!IPAddress.TryParse(value, out _))
+            return _error = "Invalid IP format (v4 or v6 required).";
+
+        return null;
     }
 
     private async Task RunSearch()
     {
-        await _form.Validate();
+        await _form.ValidateAsync();
         if (!_form.IsValid) return;
 
         try

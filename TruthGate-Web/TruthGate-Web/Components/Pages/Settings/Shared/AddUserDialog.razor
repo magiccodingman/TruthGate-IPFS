@@ -2,10 +2,24 @@
 
 <MudDialog>
     <DialogContent>
-        <MudForm @ref="_form" Model="@_model" Validation="@Validate">
-            <MudTextField Label="Username" @bind-Value="_model.UserName" Immediate="true" Required="true" />
-            <MudTextField Label="Password" @bind-Value="_model.Password" InputType="InputType.Password" Immediate="true" Required="true" />
-            <MudTextField Label="Confirm Password" @bind-Value="_model.Confirm" InputType="InputType.Password" Immediate="true" Required="true" />
+        <MudForm @ref="_form" Model="@_model">
+            <MudTextField Label="Username"
+                          @bind-Value="_model.UserName"
+                          Immediate="true"
+                          Required="true"
+                          RequiredError="Username is required." />
+            <MudTextField Label="Password"
+                          @bind-Value="_model.Password"
+                          InputType="InputType.Password"
+                          Immediate="true"
+                          Required="true"
+                          RequiredError="Password is required." />
+            <MudTextField Label="Confirm Password"
+                          @bind-Value="_model.Confirm"
+                          InputType="InputType.Password"
+                          Immediate="true"
+                          Required="true"
+                          Validation="@(new Func<string?, string?>(ValidateConfirmation))" />
             @if (!string.IsNullOrEmpty(_error))
             {
                 <MudText Color="Color.Error" Class="mt-2">@_error</MudText>
@@ -29,7 +43,7 @@
     }
 
     private MudForm _form = default!;
-    private Model _model = new();
+    private readonly Model _model = new();
     private string? _error;
 
     private class Model
@@ -39,33 +53,32 @@
         public string Confirm { get; set; } = "";
     }
 
-    private IEnumerable<string> Validate()
+    private string? ValidateConfirmation(string? value)
     {
         _error = null;
 
-        if (string.IsNullOrWhiteSpace(_model.UserName))
-            yield return "Username is required.";
+        if (string.IsNullOrEmpty(value))
+            return _error = "Please confirm the password.";
 
-        if (string.IsNullOrEmpty(_model.Password))
-            yield return "Password is required.";
+        if (_model.Password != value)
+            return _error = "Passwords must match.";
 
-        if (_model.Password != _model.Confirm)
-            yield return "Passwords must match.";
+        return null;
     }
 
     private void Cancel() => MudDialog.Cancel();
 
     private async Task Submit()
     {
-        await _form.Validate();
+        await _form.ValidateAsync();
         if (!_form.IsValid) return;
 
-        // normalize username to lowercase (your Config also normalizes)
+        // Normalize username to lowercase (Config also normalizes it).
         var result = new AddUserResult
-            {
-                UserName = _model.UserName.Trim().ToLowerInvariant(),
-                Password = _model.Password
-            };
+        {
+            UserName = _model.UserName.Trim().ToLowerInvariant(),
+            Password = _model.Password
+        };
 
         MudDialog.Close(DialogResult.Ok(result));
     }

@@ -1,4 +1,4 @@
-﻿@page "/ip-bans"
+@page "/ip-bans"
 @using Microsoft.EntityFrameworkCore
 @using System.Net
 @using TruthGate_Web.Components.Pages.Settings.Shared
@@ -52,7 +52,7 @@
                          Hover="true"
                          Dense="true"
                          Bordered="true"
-                         Sortable="false"
+                         SortMode="SortMode.None"
                          Filterable="false"
                          RowsPerPage="20">
                 <Columns>
@@ -118,7 +118,7 @@
                                  Hover="true"
                                  Dense="true"
                                  Bordered="true"
-                                 Sortable="false"
+                                 SortMode="SortMode.None"
                                  Filterable="false"
                                  RowsPerPage="20">
                         <Columns>
@@ -164,7 +164,7 @@
                                  Hover="true"
                                  Dense="true"
                                  Bordered="true"
-                                 Sortable="false"
+                                 SortMode="SortMode.None"
                                  Filterable="false"
                                  RowsPerPage="20">
                         <Columns>
@@ -212,7 +212,7 @@
     }
     private BanFilters _banFilters = new();
 
-    private async Task<GridData<BanDto>> LoadBansGridAsync(GridState<BanDto> state)
+    private async Task<GridData<BanDto>> LoadBansGridAsync(GridState<BanDto> state, CancellationToken cancellationToken)
     {
         var page = state.Page + 1;          // Mud uses 0-based; your API is 1-based
         var pageSize = state.PageSize;
@@ -237,7 +237,7 @@
 
     private async Task ConfirmUnbanById(Guid id)
     {
-        var res = await Dialogs.ShowMessageBox("Confirm", "Unban this entry?", yesText: "Unban", cancelText: "Cancel");
+        var res = await Dialogs.ShowMessageBoxAsync("Confirm", "Unban this entry?", yesText: "Unban", cancelText: "Cancel");
         if (res == true)
         {
             var ok = await RateSvc.UnbanByIdAsync(id);
@@ -248,7 +248,7 @@
 
     private async Task ConfirmUnbanIp(string ip)
     {
-        var res = await Dialogs.ShowMessageBox("Confirm", $"Unban IP {ip} ?", yesText: "Unban", cancelText: "Cancel");
+        var res = await Dialogs.ShowMessageBoxAsync("Confirm", $"Unban IP {ip} ?", yesText: "Unban", cancelText: "Cancel");
         if (res == true)
         {
             var ok = await RateSvc.UnbanIpAsync(ip);
@@ -259,7 +259,7 @@
 
     private async Task ConfirmUnbanPrefix(string pfx)
     {
-        var res = await Dialogs.ShowMessageBox("Confirm", $"Unban prefix {pfx} ?", yesText: "Unban", cancelText: "Cancel");
+        var res = await Dialogs.ShowMessageBoxAsync("Confirm", $"Unban prefix {pfx} ?", yesText: "Unban", cancelText: "Cancel");
         if (res == true)
         {
             var ok = await RateSvc.UnbanIpv6PrefixAsync(pfx);
@@ -272,13 +272,15 @@
     private async Task OpenSearchDialog()
     {
         var parameters = new DialogParameters<SearchDialogCtx> { { x => x.InitialIp, _banFilters.IpFilter } };
-        await Dialogs.ShowAsync<SearchIpDialog>("Search IP", parameters, new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small }).Result;
+        var dialog = await Dialogs.ShowAsync<SearchIpDialog>("Search IP", parameters, new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small });
+        await dialog.Result;
     }
 
     // -------------------- ADD BAN DIALOG --------------------
     private async Task OpenAddBanDialog()
     {
-        await Dialogs.ShowAsync<AddBanDialog>("Add Ban", new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small }).Result;
+        var dialog = await Dialogs.ShowAsync<AddBanDialog>("Add Ban", new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small });
+        await dialog.Result;
         await ReloadBans();
     }
 
@@ -289,9 +291,9 @@
     private string? _newWhitelistReason;
     private int? _newWhitelistExpireHours;
 
-    private async Task<GridData<Whitelist>> LoadWhitelistIpGridAsync(GridState<Whitelist> state)
+    private async Task<GridData<Whitelist>> LoadWhitelistIpGridAsync(GridState<Whitelist> state, CancellationToken cancellationToken)
     {
-        await using var db = await DbFactory.CreateDbContextAsync();
+        await using var db = await DbFactory.CreateDbContextAsync(cancellationToken);
         var q = db.Whitelists.AsNoTracking().Where(x => x.Ip != null);
 
         if (!string.IsNullOrWhiteSpace(_wlIpSearch))
@@ -300,12 +302,12 @@
             q = q.Where(x => x.Ip!.Contains(s));
         }
 
-        var total = await q.CountAsync();
+        var total = await q.CountAsync(cancellationToken);
         var items = await q
             .OrderByDescending(x => x.CreatedUtc)
             .Skip(state.Page * state.PageSize)
             .Take(state.PageSize)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return new GridData<Whitelist> { Items = items, TotalItems = total };
     }
@@ -331,7 +333,7 @@
 
     private async Task RemoveWhitelistIp(string ip)
     {
-        var res = await Dialogs.ShowMessageBox("Confirm", $"Remove {ip} from whitelist?", yesText: "Remove", cancelText: "Cancel");
+        var res = await Dialogs.ShowMessageBoxAsync("Confirm", $"Remove {ip} from whitelist?", yesText: "Remove", cancelText: "Cancel");
         if (res == true)
         {
             var ok = await RateSvc.RemoveWhitelistIpAsync(ip);
@@ -347,9 +349,9 @@
     private string? _newWhitelistReasonPfx;
     private int? _newWhitelistExpireHoursPfx;
 
-    private async Task<GridData<Whitelist>> LoadWhitelistPrefixGridAsync(GridState<Whitelist> state)
+    private async Task<GridData<Whitelist>> LoadWhitelistPrefixGridAsync(GridState<Whitelist> state, CancellationToken cancellationToken)
     {
-        await using var db = await DbFactory.CreateDbContextAsync();
+        await using var db = await DbFactory.CreateDbContextAsync(cancellationToken);
         var q = db.Whitelists.AsNoTracking().Where(x => x.Ipv6Prefix != null);
 
         if (!string.IsNullOrWhiteSpace(_wlPfxSearch))
@@ -358,12 +360,12 @@
             q = q.Where(x => x.Ipv6Prefix!.Contains(s));
         }
 
-        var total = await q.CountAsync();
+        var total = await q.CountAsync(cancellationToken);
         var items = await q
             .OrderByDescending(x => x.CreatedUtc)
             .Skip(state.Page * state.PageSize)
             .Take(state.PageSize)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return new GridData<Whitelist> { Items = items, TotalItems = total };
     }
@@ -389,7 +391,7 @@
 
     private async Task RemoveWhitelistPrefix(string pfx)
     {
-        var res = await Dialogs.ShowMessageBox("Confirm", $"Remove {pfx} from whitelist?", yesText: "Remove", cancelText: "Cancel");
+        var res = await Dialogs.ShowMessageBoxAsync("Confirm", $"Remove {pfx} from whitelist?", yesText: "Remove", cancelText: "Cancel");
         if (res == true)
         {
             var ok = await RateSvc.RemoveWhitelistIpv6PrefixAsync(pfx);

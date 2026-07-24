@@ -1,4 +1,4 @@
-﻿@using MudBlazor
+@using MudBlazor
 
 <MudDialog>
     <DialogContent>
@@ -7,7 +7,7 @@
             <MudText Typo="Typo.body1" Class="mb-2">@Message</MudText>
         }
 
-        <MudForm @ref="_form" Validation="Validate">
+        <MudForm @ref="_form">
             <MudTextField @bind-Value="_value"
                           Label="@Label"
                           Placeholder="@Placeholder"
@@ -55,19 +55,18 @@
         _value = InitialValue ?? "";
     }
 
-    private IEnumerable<string> Validate()
+    private string? ValidateValue(string? value)
     {
         _error = null;
-        if (Required && string.IsNullOrWhiteSpace(_value))
-        {
-            _error = "Please enter a value.";
-            yield return _error;
-        }
+        if (Required && string.IsNullOrWhiteSpace(value))
+            return _error = "Please enter a value.";
+
+        return null;
     }
 
     private async Task Submit()
     {
-        await _form.Validate();
+        await _form.ValidateAsync();
         if (!_form.IsValid) return;
         MudDialog.Close(DialogResult.Ok(_value));
     }
