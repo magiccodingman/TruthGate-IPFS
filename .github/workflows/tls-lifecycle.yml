@@ -26,6 +26,7 @@ jobs:
       - name: Restore solution
         run: dotnet restore TruthGate-IPFS.sln
 
+      # This test project is intentionally outside TruthGate-IPFS.sln, so restore it explicitly.
       - name: Restore TLS tests
         run: dotnet restore TruthGate-Web/TruthGate-Web.Tests/TruthGate-Web.Tests.csproj
 
