@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 mode="${1:-production}"
 truthgate_user="truthgate"
-truthgate_group="truthgate"
+truthgate_group="$(id -g "${truthgate_user}")"
 
 log() {
     printf '[truthgate] %s\n' "$*"
