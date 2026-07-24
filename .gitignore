@@ -361,3 +361,30 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# JetBrains Rider / IntelliJ
+.idea/
+*.sln.iml
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.password
+appsettings.Local.json
+
+# MagicSettings local identity
+**/.magicsettings.identity.json
+**/.magicsettings.identity.json.*
+
+# Runtime state
+**/state/
+*.db
+*.db-shm
+*.db-wal
+
+# Test and coverage output
+coverage/
+TestResults/
