@@ -102,34 +102,9 @@ Kubo initialization, repository migrations, persistent paths, startup order,
 and process supervision are shared with production. This prevents development
 from silently using a different node layout.
 
-Rider can attach to the running development container or use the container's
-SDK. The source directory is mounted directly, so normal edits trigger
-`dotnet watch`.
-
-### Generated single-file development configuration
-
-Some tools and IDEs fail while discovering services from multiple Compose
-files. `compose.dev.generated.yaml` is the fully merged development
-configuration for that case. It is generated from `compose.yaml` and
-`compose.dev.yaml` and should not be edited directly.
-
-PowerShell 7 on Windows, Linux, or macOS:
-
-```powershell
-pwsh -NoProfile -File ./docker/generate-rider-compose.ps1
-```
-
-Bash on Linux or macOS:
-
-```bash
-bash ./docker/generate-rider-compose.sh
-```
-
-Both scripts write to a temporary file and replace
-`compose.dev.generated.yaml` only after `docker compose config` succeeds. In
-Rider, use `compose.dev.generated.yaml` as the sole Compose file and add the
-appropriate generator as an External Tool in the run configuration's
-**Before launch** tasks.
+Rider can use `compose.yaml` followed by `compose.dev.yaml` directly in a Docker
+Compose run configuration. The source directory is mounted directly, so normal
+edits trigger `dotnet watch`.
 
 ## Configuration
 
