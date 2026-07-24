@@ -1,4 +1,4 @@
-﻿@page "/keys"
+@page "/keys"
 @using TruthGate_Web.Components.Pages.Settings.Shared
 @using TruthGate_Web.Models
 @using TruthGate_Web.Utils
@@ -71,10 +71,10 @@
             { x => x.ExistingNames, _keys.Select(k => k.Name).ToList() }
         };
 
-        var dialog = Dialogs.Show<AddApiKeyDialog>("Add API Key", p, new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true });
+        var dialog = await Dialogs.ShowAsync<AddApiKeyDialog>("Add API Key", p, new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true });
         var result = await dialog.Result;
 
-        if (result.Canceled || result.Data is not AddApiKeyDialog.AddApiKeyResult r) return;
+        if (result is null || result.Canceled || result.Data is not AddApiKeyDialog.AddApiKeyResult r) return;
 
         // Final uniqueness check (server-side)
         if (_keys.Any(k => string.Equals(k.Name, r.Name, StringComparison.OrdinalIgnoreCase)))
@@ -103,10 +103,10 @@
             { x => x.Message, $"Delete API key '{key.Name}'?" }
         };
 
-        var dialog = Dialogs.Show<ConfirmDeleteDialog>("Confirm Delete", p);
+        var dialog = await Dialogs.ShowAsync<ConfirmDeleteDialog>("Confirm Delete", p);
         var result = await dialog.Result;
 
-        if (result.Canceled || result.Data is not bool yes || !yes) return;
+        if (result is null || result.Canceled || result.Data is not bool yes || !yes) return;
 
         await ConfigSvc.UpdateAsync(cfg =>
         {

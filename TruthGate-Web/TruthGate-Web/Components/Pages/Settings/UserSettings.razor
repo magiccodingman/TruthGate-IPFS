@@ -83,7 +83,7 @@
 
     private async Task AddUser()
     {
-        var dialog = Dialogs.Show<AddUserDialog>("Add User");
+        var dialog = await Dialogs.ShowAsync<AddUserDialog>("Add User");
         var result = await dialog.Result;
         if (result.Canceled || result.Data is not AddUserDialog.AddUserResult r) return;
 
@@ -115,7 +115,7 @@
             { x => x.TargetUserName, user.UserName }
         };
 
-        var dialog = Dialogs.Show<ChangePasswordDialog>($"Change Password: {user.UserName}", parameters);
+        var dialog = await Dialogs.ShowAsync<ChangePasswordDialog>($"Change Password: {user.UserName}", parameters);
         var result = await dialog.Result;
 
         if (result.Canceled || result.Data is not ChangePasswordDialog.ChangePasswordResult r) return;
@@ -147,7 +147,7 @@
             { x => x.Message, $"Delete user '{user.UserName}'?" }
         };
 
-        var dialog = Dialogs.Show<ConfirmDeleteDialog>("Confirm Delete", parameters);
+        var dialog = await Dialogs.ShowAsync<ConfirmDeleteDialog>("Confirm Delete", parameters);
         var result = await dialog.Result;
 
         if (result.Canceled || result.Data is not bool confirmed || !confirmed) return;

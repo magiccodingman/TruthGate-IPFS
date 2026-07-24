@@ -1,4 +1,4 @@
-﻿@page "/domains"
+@page "/domains"
 @using System.Globalization
 @using System.Text.RegularExpressions
 @using MudBlazor
@@ -47,7 +47,7 @@
                 @context.Domain
                 @if (!string.IsNullOrWhiteSpace(context.RedirectUrl))
                 {
-                    <MudText Typo="Typo.caption" Class="truncate-text" Title="@context.RedirectUrl">
+                    <MudText Typo="Typo.caption" Class="truncate-text" title="@context.RedirectUrl">
                         @{
                             var u = context.RedirectUrl ?? string.Empty;
                         }
@@ -60,7 +60,7 @@
 
                     <MudStack Row="true" Spacing="1" Class="mt-1">
                         <MudTooltip Text="@($"{GetLabel(context)}.{_wildcardHost}")">
-                            <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Link">
+                            <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Link">
                                 @($"{GetIpnsHost(context, useShort: true)}")
                             </MudChip>
                         </MudTooltip>
@@ -88,7 +88,7 @@
                             @context.IpnsKeyName
                         </MudChip> *@
                         <MudTooltip Text="@context.IpnsPeerId">
-                            <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Fingerprint">
+                            <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Fingerprint">
                                 IPNS: @Short(context.IpnsPeerId)
                             </MudChip>
                         </MudTooltip>
@@ -168,7 +168,7 @@
     private async Task PublishDomain(EdgeDomain d)
     {
         var parms = new DialogParameters<PublishDialog> { { x => x.Domain, d.Domain } };
-        var dlg = Dialogs.Show<PublishDialog>($"Publish: {d.Domain}", parms,
+        var dlg = await Dialogs.ShowAsync<PublishDialog>($"Publish: {d.Domain}", parms,
             new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Large, CloseButton = true });
 
         await dlg.Result;
@@ -225,7 +225,7 @@
     private async Task ImportDomain()
     {
         var parms = new DialogParameters<ImportDomainDialog>();
-        var dlg = Dialogs.Show<ImportDomainDialog>("Import Domain Backup", parms,
+        var dlg = await Dialogs.ShowAsync<ImportDomainDialog>("Import Domain Backup", parms,
             new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true });
         await dlg.Result;
     }
@@ -233,7 +233,7 @@
     private async Task<string?> PromptAsync(string title, string message)
     {
         var p = new DialogParameters<SimplePromptDialog> { { x => x.Message, message } };
-        var dlg = Dialogs.Show<SimplePromptDialog>(title, p);
+        var dlg = await Dialogs.ShowAsync<SimplePromptDialog>(title, p);
         var res = await dlg.Result;
         return res.Canceled ? null : (res.Data as string);
     }
@@ -271,7 +271,7 @@
        => string.IsNullOrWhiteSpace(s) || s.Length <= head + tail + 1 ? s : $"{s[..head]}…{s[^tail..]}";
     private async Task AddDomain()
     {
-        var dialog = Dialogs.Show<AddOrEditDomainDialog>("Add Domain");
+        var dialog = await Dialogs.ShowAsync<AddOrEditDomainDialog>("Add Domain");
         var result = await dialog.Result;
 
         if (result.Canceled || result.Data is not AddOrEditDomainDialog.DomainResult r) return;
@@ -316,7 +316,7 @@
             { x => x.IsEdit, true }
         };
 
-        var dialog = Dialogs.Show<AddOrEditDomainDialog>($"Edit Domain: {domain.Domain}", parameters);
+        var dialog = await Dialogs.ShowAsync<AddOrEditDomainDialog>($"Edit Domain: {domain.Domain}", parameters);
         var result = await dialog.Result;
 
         if (result.Canceled || result.Data is not AddOrEditDomainDialog.DomainResult r) return;
@@ -359,7 +359,7 @@
         { x => x.Message, $"Delete domain '{domain.Domain}'?\n\nThis will remove its config entry, IPNS key, pins, and MFS folders." }
     };
 
-        var dialog = Dialogs.Show<ConfirmDeleteDialog>("Confirm Delete", parameters);
+        var dialog = await Dialogs.ShowAsync<ConfirmDeleteDialog>("Confirm Delete", parameters);
         var result = await dialog.Result;
         if (result.Canceled || result.Data is not bool confirmed || !confirmed) return;
 

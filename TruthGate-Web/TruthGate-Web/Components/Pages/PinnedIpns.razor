@@ -283,7 +283,7 @@
         { x => x.ManagedRoot, ManagedRoot },
         { x => x.IsEdit, false }
     };
-        var dlg = Dialogs.Show<AddOrEditIpnsDialog>("Add IPNS", parameters,
+        var dlg = await Dialogs.ShowAsync<AddOrEditIpnsDialog>("Add IPNS", parameters,
             new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true });
         var res = await dlg.Result;
         if (res.Canceled || res.Data is not AddOrEditIpnsDialog.IpnsResult r) return;
@@ -317,7 +317,7 @@
         { x => x.InitialKeepOldCidPinned, row.KeepOld }
     };
 
-        var dlg = Dialogs.Show<AddOrEditIpnsDialog>($"Edit IPNS - {row.Name}", parameters,
+        var dlg = await Dialogs.ShowAsync<AddOrEditIpnsDialog>($"Edit IPNS - {row.Name}", parameters,
             new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true });
         var res = await dlg.Result;
         if (res.Canceled || res.Data is not AddOrEditIpnsDialog.IpnsResult r) return;
@@ -348,7 +348,7 @@
         {
             { x => x.Message, $"Remove IPNS '{row.Name}' from tracking? (Pinned versions stay.)" }
         };
-        var dlg = Dialogs.Show<ConfirmDeleteDialog>("Confirm Remove", confirmParams);
+        var dlg = await Dialogs.ShowAsync<ConfirmDeleteDialog>("Confirm Remove", confirmParams);
         var res = await dlg.Result;
         if (res.Canceled || res.Data is not bool ok || !ok) return;
 
