@@ -14,15 +14,17 @@
                       Immediate="true"
                       Required="true" />
 
-                      <br />
-        <MudFileUpload T="IReadOnlyList<IBrowserFile>" FilesChanged="OnFileChanged" MaxItems="1">
-            <ActivatorContent>
+        <br />
+        <MudFileUpload T="IBrowserFile" FilesChanged="OnFileChanged">
+            <CustomContent>
                 <MudButton Variant="Variant.Filled"
                            Color="Color.Primary"
-                           StartIcon="@Icons.Material.Filled.VpnKey">
+                           StartIcon="@Icons.Material.Filled.VpnKey"
+                           OnClick="@context.OpenFilePickerAsync">
                     Select Backup (.tgbackup)
                 </MudButton>
-            </ActivatorContent>
+            </CustomContent>
+            <SelectedTemplate />
         </MudFileUpload>
     </DialogContent>
 
@@ -43,8 +45,8 @@
     private IBrowserFile? _file;
     private string? _pass;
 
-    private void OnFileChanged(IReadOnlyList<IBrowserFile> picked)
-        => _file = picked.FirstOrDefault();
+    private void OnFileChanged(IBrowserFile picked)
+        => _file = picked;
 
     private async Task Submit()
     {
