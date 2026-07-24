@@ -1,0 +1,30 @@
+services:
+  truthgate:
+    image: truthgate-ipfs:dev
+    build:
+      target: development
+    command: ["development"]
+    restart: "no"
+    read_only: false
+    working_dir: /workspace
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      DOTNET_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://0.0.0.0:80
+      DOTNET_USE_POLLING_FILE_WATCHER: "1"
+      TRUTHGATE_DEV_PROJECT: /workspace/TruthGate-Web/TruthGate-Web/TruthGate-Web.csproj
+      TRUTHGATE_HEALTH_URL: http://127.0.0.1:80/
+    ports: !override
+      - "${TRUTHGATE_DEV_HTTP_PORT:-8080}:80/tcp"
+      - "${IPFS_SWARM_PORT:-4001}:4001/tcp"
+      - "${IPFS_SWARM_PORT:-4001}:4001/udp"
+    volumes:
+      - type: bind
+        source: .
+        target: /workspace
+      - type: volume
+        source: truthgate_nuget
+        target: /home/truthgate/.nuget/packages
+
+volumes:
+  truthgate_nuget:
