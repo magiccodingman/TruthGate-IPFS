@@ -97,7 +97,7 @@ jobs:
           done
 
           test "$(docker inspect --format '{{.State.Health.Status}}' truthgate)" = "healthy"
-          test "$(docker exec truthgate tr -d '[:space:]' </data/ipfs/repo/version)" = "18"
+          test "$(docker exec truthgate sh -lc "tr -d '[:space:]' </data/ipfs/repo/version")" = "18"
 
           peer_id_after="$(docker exec truthgate ipfs config Identity.PeerID)"
           test "${peer_id_before}" = "${peer_id_after}"
