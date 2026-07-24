@@ -4,8 +4,8 @@ set -Eeuo pipefail
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 compose_file="${repository_root}/compose.yaml"
 dev_compose_file="${repository_root}/compose.dev.yaml"
-output_file="${repository_root}/compose.rider.yaml"
-temp_file="$(mktemp "${repository_root}/.compose.rider.XXXXXX.tmp")"
+output_file="${repository_root}/compose.dev.generated.yaml"
+temp_file="$(mktemp "${repository_root}/.compose.dev.generated.XXXXXX.tmp")"
 
 cleanup() {
   rm -f "${temp_file}"
