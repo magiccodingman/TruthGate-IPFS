@@ -34,8 +34,18 @@ The first-start logs contain a generated password for the `admin` account.
 Open `https://localhost`, accept the temporary self-signed fallback certificate,
 and change the password.
 
-For the full persistence contract, image update flow, ARM64/AMD64 publishing,
-and Docker-based development setup, see **[DOCKER.md](DOCKER.md)**.
+The appliance configures Kubo as a contributing server by default: DHT server
+mode, TCP/QUIC/WebTransport swarm listeners, content providing, automatic
+storage sizing, and repository GC are enabled with persistent per-setting
+overrides. Inspect the live node with:
+
+```bash
+docker exec truthgate truthgate-kubo-status
+```
+
+For the full persistence contract, Kubo settings, image update flow,
+ARM64/AMD64 publishing, and Docker-based development setup, see
+**[DOCKER.md](DOCKER.md)**.
 
 Development with hot reload uses the production definition plus a small
 override:
