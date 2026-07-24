@@ -32,8 +32,12 @@ RUN apt-get update \
         gosu \
         tini \
     && rm -rf /var/lib/apt/lists/* \
-    && groupadd --gid "${TRUTHGATE_GID}" truthgate \
-    && useradd --uid "${TRUTHGATE_UID}" --gid truthgate --create-home --shell /usr/sbin/nologin truthgate \
+    && if ! getent group "${TRUTHGATE_GID}" >/dev/null; then groupadd --gid "${TRUTHGATE_GID}" truthgate; fi \
+    && if existing_user="$(getent passwd "${TRUTHGATE_UID}" | cut -d: -f1)" && [ -n "${existing_user}" ]; then \
+         usermod --login truthgate --home /home/truthgate --move-home --shell /usr/sbin/nologin "${existing_user}"; \
+       else \
+         useradd --uid "${TRUTHGATE_UID}" --gid "${TRUTHGATE_GID}" --create-home --shell /usr/sbin/nologin truthgate; \
+       fi \
     && mkdir -p /home/truthgate/.aspnet \
     && ln -s /data/truthgate/secrets/data-protection-keys /home/truthgate/.aspnet/DataProtection-Keys
 
@@ -77,10 +81,14 @@ RUN apt-get update \
         gosu \
         tini \
     && rm -rf /var/lib/apt/lists/* \
-    && groupadd --gid "${TRUTHGATE_GID}" truthgate \
-    && useradd --uid "${TRUTHGATE_UID}" --gid truthgate --create-home --shell /bin/bash truthgate \
+    && if ! getent group "${TRUTHGATE_GID}" >/dev/null; then groupadd --gid "${TRUTHGATE_GID}" truthgate; fi \
+    && if existing_user="$(getent passwd "${TRUTHGATE_UID}" | cut -d: -f1)" && [ -n "${existing_user}" ]; then \
+         usermod --login truthgate --home /home/truthgate --move-home --shell /bin/bash "${existing_user}"; \
+       else \
+         useradd --uid "${TRUTHGATE_UID}" --gid "${TRUTHGATE_GID}" --create-home --shell /bin/bash truthgate; \
+       fi \
     && mkdir -p /workspace /home/truthgate/.aspnet \
-    && chown truthgate:truthgate /workspace \
+    && chown "${TRUTHGATE_UID}:${TRUTHGATE_GID}" /workspace \
     && ln -s /data/truthgate/secrets/data-protection-keys /home/truthgate/.aspnet/DataProtection-Keys
 
 COPY --from=kubo /usr/local/bin/ipfs /usr/local/bin/ipfs
