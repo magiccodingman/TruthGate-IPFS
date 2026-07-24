@@ -1,9 +1,9 @@
-﻿@using MudBlazor
+@using MudBlazor
 @using TruthGate_Web.Utils
 
 <MudDialog>
     <DialogContent>
-        <MudForm @ref="_form" Model="_model" Validation="Validate">
+        <MudForm @ref="_form" Model="_model">
             <MudText Typo="Typo.h5" Class="mb-2">Add Pinned Item</MudText>
 
             <MudTextField Label="Folder name (under /production/pinned)"
