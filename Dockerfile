@@ -50,6 +50,7 @@ RUN apt-get update \
 COPY --from=kubo /usr/local/bin/ipfs /usr/local/bin/ipfs
 COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/truthgate-entrypoint
 COPY --chmod=0755 docker/healthcheck.sh /usr/local/bin/truthgate-healthcheck
+COPY --chmod=0755 docker/kubo-configure.sh /usr/local/bin/truthgate-configure-kubo
 COPY --chmod=0755 docker/kubo-status.sh /usr/local/bin/truthgate-kubo-status
 
 ENV ASPNETCORE_ENVIRONMENT=Production \
@@ -104,6 +105,7 @@ RUN apt-get update \
 COPY --from=kubo /usr/local/bin/ipfs /usr/local/bin/ipfs
 COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/truthgate-entrypoint
 COPY --chmod=0755 docker/healthcheck.sh /usr/local/bin/truthgate-healthcheck
+COPY --chmod=0755 docker/kubo-configure.sh /usr/local/bin/truthgate-configure-kubo
 COPY --chmod=0755 docker/kubo-status.sh /usr/local/bin/truthgate-kubo-status
 
 ENV ASPNETCORE_ENVIRONMENT=Development \
