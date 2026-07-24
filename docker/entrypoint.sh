@@ -30,6 +30,7 @@ require_absolute_path() {
 : "${TRUTHGATE_CERT_PATH:=/data/truthgate/certificates}"
 : "${TRUTHGATE_STATE_PATH:=/data/truthgate/state}"
 : "${TMPDIR:=/run/truthgate}"
+: "${TRUTHGATE_KUBO_REPO_VERSION:=18}"
 
 export IPFS_PATH TRUTHGATE_CONFIG_PATH TRUTHGATE_DATABASE_PATH
 export TRUTHGATE_CERT_PATH TRUTHGATE_STATE_PATH TMPDIR
@@ -40,6 +41,8 @@ require_absolute_path TRUTHGATE_DATABASE_PATH "${TRUTHGATE_DATABASE_PATH}"
 require_absolute_path TRUTHGATE_CERT_PATH "${TRUTHGATE_CERT_PATH}"
 require_absolute_path TRUTHGATE_STATE_PATH "${TRUTHGATE_STATE_PATH}"
 require_absolute_path TMPDIR "${TMPDIR}"
+[[ "${TRUTHGATE_KUBO_REPO_VERSION}" =~ ^[0-9]+$ ]] \
+    || fail "TRUTHGATE_KUBO_REPO_VERSION must be a positive integer."
 
 config_directory="$(dirname "${TRUTHGATE_CONFIG_PATH}")"
 blocks_directory="${IPFS_PATH}/blocks"
@@ -102,6 +105,43 @@ chown "${truthgate_user}:${truthgate_group}" \
     "${TRUTHGATE_STATE_PATH}" \
     "${data_protection_directory}" \
     "${TMPDIR}"
+
+migrate_existing_kubo_repository() {
+    local repo_config="${IPFS_PATH}/config"
+    local repo_version_file="${IPFS_PATH}/version"
+    local current_version migrated_version
+
+    # Fresh repositories are initialized later by truthgate-configure-kubo and
+    # already use the format expected by the bundled Kubo binary.
+    [[ -s "${repo_config}" ]] || return 0
+
+    [[ -s "${repo_version_file}" ]] \
+        || fail "Existing Kubo repository is missing its version file: ${repo_version_file}"
+
+    current_version="$(tr -d '[:space:]' <"${repo_version_file}")"
+    [[ "${current_version}" =~ ^[0-9]+$ ]] \
+        || fail "Kubo repository version is invalid: '${current_version}'."
+
+    if (( current_version > TRUTHGATE_KUBO_REPO_VERSION )); then
+        fail "Kubo repository version ${current_version} is newer than the bundled Kubo supports (${TRUTHGATE_KUBO_REPO_VERSION}). Upgrade the TruthGate image before starting this repository."
+    fi
+
+    if (( current_version == TRUTHGATE_KUBO_REPO_VERSION )); then
+        log "Kubo repository is already at version ${current_version}."
+        return 0
+    fi
+
+    log "Migrating Kubo repository from version ${current_version} to ${TRUTHGATE_KUBO_REPO_VERSION} before applying managed configuration."
+    as_truthgate ipfs repo migrate --to="${TRUTHGATE_KUBO_REPO_VERSION}"
+
+    migrated_version="$(tr -d '[:space:]' <"${repo_version_file}")"
+    [[ "${migrated_version}" == "${TRUTHGATE_KUBO_REPO_VERSION}" ]] \
+        || fail "Kubo repository migration completed without producing expected version ${TRUTHGATE_KUBO_REPO_VERSION}; found '${migrated_version}'."
+
+    log "Kubo repository migration completed at version ${migrated_version}."
+}
+
+migrate_existing_kubo_repository
 
 bootstrap_password_file="${TRUTHGATE_STATE_PATH}/bootstrap-admin-password"
 if [[ ! -s "${TRUTHGATE_CONFIG_PATH}" ]]; then
