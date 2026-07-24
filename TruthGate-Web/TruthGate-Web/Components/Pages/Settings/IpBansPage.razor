@@ -272,7 +272,7 @@
     private async Task OpenSearchDialog()
     {
         var parameters = new DialogParameters<SearchDialogCtx> { { x => x.InitialIp, _banFilters.IpFilter } };
-        await await Dialogs.ShowAsync<SearchIpDialog>("Search IP", parameters, new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small }).Result;
+        await Dialogs.ShowAsync<SearchIpDialog>("Search IP", parameters, new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small }).Result;
     }
 
     // -------------------- ADD BAN DIALOG --------------------
