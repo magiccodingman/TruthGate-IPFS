@@ -3,17 +3,13 @@ name: TLS lifecycle tests
 on:
   pull_request:
     paths:
-      - "TruthGate-Web/TruthGate-Web/Configuration/**"
-      - "TruthGate-Web/TruthGate-Web/Services/ConfigWatchAndIssueService.cs"
-      - "TruthGate-Web/TruthGate-Web.Tests/**"
+      - "TruthGate-Web/**"
       - ".github/workflows/tls-lifecycle.yml"
   push:
     branches:
       - master
     paths:
-      - "TruthGate-Web/TruthGate-Web/Configuration/**"
-      - "TruthGate-Web/TruthGate-Web/Services/ConfigWatchAndIssueService.cs"
-      - "TruthGate-Web/TruthGate-Web.Tests/**"
+      - "TruthGate-Web/**"
       - ".github/workflows/tls-lifecycle.yml"
 
 jobs:
@@ -25,37 +21,19 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "9.0.x"
+          dotnet-version: "10.0.x"
 
-      - name: Restore
-        run: dotnet restore TruthGate-Web/TruthGate-Web.Tests/TruthGate-Web.Tests.csproj
+      - name: Restore solution
+        run: dotnet restore TruthGate-IPFS.sln
 
-      - name: Test
-        id: test
-        shell: bash
-        run: |
-          set +e
-          dotnet test \
-            TruthGate-Web/TruthGate-Web.Tests/TruthGate-Web.Tests.csproj \
-            --no-restore \
-            --configuration Release \
-            --logger "console;verbosity=normal" \
-            > tls-test-output.log 2>&1
-          status=$?
-          echo "status=$status" >> "$GITHUB_OUTPUT"
-          exit 0
+      - name: Build solution
+        run: dotnet build TruthGate-IPFS.sln --no-restore --configuration Release
 
-      - name: Upload test diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: tls-test-output
-          path: tls-test-output.log
-          if-no-files-found: error
-
-      - name: Report failure
-        if: steps.test.outputs.status != '0'
-        shell: bash
-        run: |
-          echo "TLS lifecycle tests failed. Download the tls-test-output artifact for the complete compiler/test diagnostics."
-          exit 1
+      - name: Test TLS lifecycle
+        run: >-
+          dotnet test
+          TruthGate-Web/TruthGate-Web.Tests/TruthGate-Web.Tests.csproj
+          --no-restore
+          --no-build
+          --configuration Release
+          --logger "console;verbosity=normal"
