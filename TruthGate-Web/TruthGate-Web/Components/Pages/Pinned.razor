@@ -282,7 +282,7 @@
                 MaxWidth = MaxWidth.Medium
             };
         var parameters = new DialogParameters<AddPinnedItemDialog>();
-        var dialog = Dialogs.Show<AddPinnedItemDialog>("Add Pinned Item", parameters, options);
+        var dialog = await Dialogs.ShowAsync<AddPinnedItemDialog>("Add Pinned Item", parameters, options);
         var result = await dialog.Result;
 
         if (result.Canceled || result.Data is not AddPinnedItemDialog.AddPinnedResult r) return;
@@ -331,7 +331,7 @@
         {
             { x => x.Message, $"Unpin and delete '{(row.Name ?? row.Cid)}'?" }
         };
-        var dialog = Dialogs.Show<ConfirmDeleteDialog>("Confirm Delete", parameters);
+        var dialog = await Dialogs.ShowAsync<ConfirmDeleteDialog>("Confirm Delete", parameters);
         var result = await dialog.Result;
         if (result.Canceled || result.Data is not bool ok || !ok) return;
 

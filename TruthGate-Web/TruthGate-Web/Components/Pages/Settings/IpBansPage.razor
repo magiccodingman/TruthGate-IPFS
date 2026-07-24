@@ -272,13 +272,13 @@
     private async Task OpenSearchDialog()
     {
         var parameters = new DialogParameters<SearchDialogCtx> { { x => x.InitialIp, _banFilters.IpFilter } };
-        await Dialogs.Show<SearchIpDialog>("Search IP", parameters, new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small }).Result;
+        await await Dialogs.ShowAsync<SearchIpDialog>("Search IP", parameters, new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small }).Result;
     }
 
     // -------------------- ADD BAN DIALOG --------------------
     private async Task OpenAddBanDialog()
     {
-        await Dialogs.Show<AddBanDialog>("Add Ban", new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small }).Result;
+        await Dialogs.ShowAsync<AddBanDialog>("Add Ban", new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small }).Result;
         await ReloadBans();
     }
 
