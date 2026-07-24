@@ -77,10 +77,9 @@
             <MudText Typo="Typo.subtitle1">CPU % (System vs Process)</MudText>
             <MudChart ChartType="ChartType.Line"
                       ChartSeries="@_cpuSeries"
-                      XAxisLabels="@_xLabels"
+                      ChartLabels="@_xLabels"
                       Width="100%"
                       Height="300"
-                      AxisChartOptions="@_axisOptions"
                       ChartOptions="@_chartOptions" />
         </MudPaper>
     </MudItem>
@@ -91,10 +90,9 @@
             <MudText Typo="Typo.subtitle1">System Memory Used (GB)</MudText>
             <MudChart ChartType="ChartType.Line"
                       ChartSeries="@_sysMemSeries"
-                      XAxisLabels="@_xLabels"
+                      ChartLabels="@_xLabels"
                       Width="100%"
                       Height="300"
-                      AxisChartOptions="@_axisOptions"
                       ChartOptions="@_chartOptions" />
         </MudPaper>
     </MudItem>
@@ -105,10 +103,9 @@
             <MudText Typo="Typo.subtitle1">Process Memory (MB) · Working Set & GC Heap</MudText>
             <MudChart ChartType="ChartType.Line"
                       ChartSeries="@_procMemSeries"
-                      XAxisLabels="@_xLabels"
+                      ChartLabels="@_xLabels"
                       Width="100%"
                       Height="300"
-                      AxisChartOptions="@_axisOptions"
                       ChartOptions="@_chartOptions" />
         </MudPaper>
     </MudItem>
@@ -119,11 +116,10 @@
             <MudText Typo="Typo.subtitle1">ThreadPool · Threads & Queue</MudText>
             <MudChart ChartType="ChartType.Line"
                       ChartSeries="@_tpSeries"
-                      XAxisLabels="@_xLabels"
+                      ChartLabels="@_xLabels"
                       Width="100%"
                       Height="300"
-                      AxisChartOptions="@_axisOptions"
-                      ChartOptions="@_chartOptions" />           
+                      ChartOptions="@_chartOptions" />
         </MudPaper>
     </MudItem>
 
@@ -156,38 +152,35 @@
     private int _detailedWindowSeconds = 30; // Detailed: last 30s
     private bool _rotateXLabels = true;
 
-    // ===== Axis cosmetics =====
-    private readonly AxisChartOptions _axisOptions = new()
-        {
-            MatchBoundsToSize = true,
-            XAxisLabelRotation = 45
-        };
-    private readonly ChartOptions _chartOptions = new()
-        {
-            YAxisTicks = 8
-        };
+    // ===== Chart cosmetics =====
+    private readonly LineChartOptions _chartOptions = new()
+    {
+        MatchBoundsToSize = true,
+        XAxisLabelRotation = 45,
+        YAxisTicks = 8
+    };
 
     // ===== Series & labels =====
     private string[] _xLabels = Array.Empty<string>();
 
-    private readonly List<ChartSeries> _cpuSeries = new()
+    private readonly List<ChartSeries<double>> _cpuSeries = new()
     {
-        new ChartSeries { Name = "System CPU %",  Data = Array.Empty<double>() },
-        new ChartSeries { Name = "Process CPU %", Data = Array.Empty<double>() }
+        new ChartSeries<double> { Name = "System CPU %",  Data = Array.Empty<double>().AsChartDataSet() },
+        new ChartSeries<double> { Name = "Process CPU %", Data = Array.Empty<double>().AsChartDataSet() }
     };
-    private readonly List<ChartSeries> _sysMemSeries = new()
+    private readonly List<ChartSeries<double>> _sysMemSeries = new()
     {
-        new ChartSeries { Name = "System Used (GB)", Data = Array.Empty<double>() }
+        new ChartSeries<double> { Name = "System Used (GB)", Data = Array.Empty<double>().AsChartDataSet() }
     };
-    private readonly List<ChartSeries> _procMemSeries = new()
+    private readonly List<ChartSeries<double>> _procMemSeries = new()
     {
-        new ChartSeries { Name = "Working Set (MB)", Data = Array.Empty<double>() },
-        new ChartSeries { Name = "GC Heap (MB)",     Data = Array.Empty<double>() }
+        new ChartSeries<double> { Name = "Working Set (MB)", Data = Array.Empty<double>().AsChartDataSet() },
+        new ChartSeries<double> { Name = "GC Heap (MB)",     Data = Array.Empty<double>().AsChartDataSet() }
     };
-    private readonly List<ChartSeries> _tpSeries = new()
+    private readonly List<ChartSeries<double>> _tpSeries = new()
     {
-        new ChartSeries { Name = "Threads",      Data = Array.Empty<double>() },
-        new ChartSeries { Name = "Queue Length", Data = Array.Empty<double>() }
+        new ChartSeries<double> { Name = "Threads",      Data = Array.Empty<double>().AsChartDataSet() },
+        new ChartSeries<double> { Name = "Queue Length", Data = Array.Empty<double>().AsChartDataSet() }
     };
 
     // ===== Now-cards =====
@@ -214,7 +207,7 @@
         {
             while (await _timer!.WaitForNextTickAsync(_cts.Token))
             {
-                _axisOptions.XAxisLabelRotation = _rotateXLabels ? 45 : 0;
+                _chartOptions.XAxisLabelRotation = _rotateXLabels ? 45 : 0;
                 RebuildSeries();
                 await InvokeAsync(StateHasChanged);
             }
@@ -251,16 +244,16 @@
         _xLabels = BuildLabels(window, _isDetailed);
 
         // Series fill
-        _cpuSeries[0].Data = window.Select(p => p.SysCpuPct).ToArray();
-        _cpuSeries[1].Data = window.Select(p => p.ProcCpuPct).ToArray();
+        _cpuSeries[0].Data = window.Select(p => p.SysCpuPct).ToArray().AsChartDataSet();
+        _cpuSeries[1].Data = window.Select(p => p.ProcCpuPct).ToArray().AsChartDataSet();
 
-        _sysMemSeries[0].Data = window.Select(p => p.SysMemUsedMB / 1024.0).ToArray();
+        _sysMemSeries[0].Data = window.Select(p => p.SysMemUsedMB / 1024.0).ToArray().AsChartDataSet();
 
-        _procMemSeries[0].Data = window.Select(p => p.ProcWorkingSetMB).ToArray();
-        _procMemSeries[1].Data = window.Select(p => p.ProcGcHeapMB).ToArray();
+        _procMemSeries[0].Data = window.Select(p => p.ProcWorkingSetMB).ToArray().AsChartDataSet();
+        _procMemSeries[1].Data = window.Select(p => p.ProcGcHeapMB).ToArray().AsChartDataSet();
 
-        _tpSeries[0].Data = window.Select(p => (double)p.ThreadPoolThreads).ToArray();
-        _tpSeries[1].Data = window.Select(p => (double)p.ThreadPoolQueueLength).ToArray();
+        _tpSeries[0].Data = window.Select(p => (double)p.ThreadPoolThreads).ToArray().AsChartDataSet();
+        _tpSeries[1].Data = window.Select(p => (double)p.ThreadPoolQueueLength).ToArray().AsChartDataSet();
     }
 
     private static IReadOnlyList<MetricPoint> SliceDetailed(IReadOnlyList<MetricPoint> pts, int windowSeconds)
