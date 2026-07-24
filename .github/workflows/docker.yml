@@ -22,7 +22,7 @@ env:
 
 jobs:
   validate-compose:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Validate production Compose
@@ -31,80 +31,130 @@ jobs:
         run: docker compose -f compose.yaml -f compose.dev.yaml config
 
   smoke-test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: amd64
+            runner: ubuntu-24.04
+          - architecture: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build production image (AMD64)
+      - name: Build production image (${{ matrix.architecture }})
         shell: bash
         run: |
           set -o pipefail
-          docker build --progress=plain --target production --tag truthgate-ipfs:test . 2>&1 \
-            | tee production-image-build.log
+          docker build \
+            --progress=plain \
+            --platform linux/${{ matrix.architecture }} \
+            --target production \
+            --tag truthgate-ipfs:test-${{ matrix.architecture }} \
+            . 2>&1 | tee production-image-build-${{ matrix.architecture }}.log
 
       - name: Upload production build diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: production-image-build
-          path: production-image-build.log
+          name: production-image-build-${{ matrix.architecture }}
+          path: production-image-build-${{ matrix.architecture }}.log
           if-no-files-found: error
 
-      - name: Build development image (AMD64)
+      - name: Build development image (${{ matrix.architecture }})
         shell: bash
         run: |
           set -o pipefail
-          docker build --progress=plain --target development --tag truthgate-ipfs:dev-test . 2>&1 \
-            | tee development-image-build.log
+          docker build \
+            --progress=plain \
+            --platform linux/${{ matrix.architecture }} \
+            --target development \
+            --tag truthgate-ipfs:dev-test-${{ matrix.architecture }} \
+            . 2>&1 | tee development-image-build-${{ matrix.architecture }}.log
 
       - name: Upload development build diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: development-image-build
-          path: development-image-build.log
+          name: development-image-build-${{ matrix.architecture }}
+          path: development-image-build-${{ matrix.architecture }}.log
           if-no-files-found: ignore
 
-      - name: Start appliance and wait for health
+      - name: Start, replace, and revalidate the appliance
         shell: bash
         run: |
           set -Eeuo pipefail
-          trap 'docker compose logs --no-color || true; docker compose down --remove-orphans || true' EXIT
+
+          export TRUTHGATE_IMAGE=truthgate-ipfs:test-${{ matrix.architecture }}
+          export TRUTHGATE_HTTP_PORT=18080
+          export TRUTHGATE_HTTPS_PORT=18443
+          export IPFS_SWARM_PORT=14001
+          export TRUTHGATE_DATA_HOST_PATH=./.ci-data/truthgate
+          export IPFS_REPO_HOST_PATH=./.ci-data/ipfs/repo
+          export IPFS_BLOCKS_HOST_PATH=./.ci-data/ipfs/blocks
+
+          cleanup() {
+            docker compose logs --no-color 2>/dev/null || true
+            docker compose down --remove-orphans 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          wait_for_health() {
+            for attempt in $(seq 1 60); do
+              status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' truthgate)"
+              if [[ "${status}" == "healthy" ]]; then
+                return 0
+              fi
+
+              if [[ "${status}" == "unhealthy" ]]; then
+                echo "TruthGate became unhealthy."
+                return 1
+              fi
+
+              sleep 5
+            done
+
+            echo "TruthGate did not become healthy in time."
+            return 1
+          }
+
+          read_peer_id() {
+            docker exec truthgate \
+              ipfs --api=/ip4/127.0.0.1/tcp/5001 id \
+              | python3 -c 'import json, sys; print(json.load(sys.stdin)["ID"])'
+          }
 
           mkdir -p .ci-data/truthgate .ci-data/ipfs/repo .ci-data/ipfs/blocks
 
-          TRUTHGATE_IMAGE=truthgate-ipfs:test \
-          TRUTHGATE_HTTP_PORT=18080 \
-          TRUTHGATE_HTTPS_PORT=18443 \
-          IPFS_SWARM_PORT=14001 \
-          TRUTHGATE_DATA_HOST_PATH=./.ci-data/truthgate \
-          IPFS_REPO_HOST_PATH=./.ci-data/ipfs/repo \
-          IPFS_BLOCKS_HOST_PATH=./.ci-data/ipfs/blocks \
           docker compose up --detach --no-build
+          wait_for_health
 
-          for attempt in $(seq 1 60); do
-            status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' truthgate)"
-            if [[ "${status}" == "healthy" ]]; then
-              docker compose logs --no-color
-              exit 0
-            fi
+          test -s .ci-data/ipfs/repo/config
+          test -s .ci-data/truthgate/state/bootstrap-admin-password
+          peer_id_before="$(read_peer_id)"
+          bootstrap_hash_before="$(sha256sum .ci-data/truthgate/state/bootstrap-admin-password | cut -d' ' -f1)"
 
-            if [[ "${status}" == "unhealthy" ]]; then
-              echo "TruthGate became unhealthy."
-              exit 1
-            fi
+          # Replace the container while retaining only the documented bind-mounted
+          # state. The Kubo identity and first-run credential must remain stable.
+          docker compose down --remove-orphans
+          docker compose up --detach --no-build
+          wait_for_health
 
-            sleep 5
-          done
+          peer_id_after="$(read_peer_id)"
+          bootstrap_hash_after="$(sha256sum .ci-data/truthgate/state/bootstrap-admin-password | cut -d' ' -f1)"
 
-          echo "TruthGate did not become healthy in time."
-          exit 1
+          test "${peer_id_before}" = "${peer_id_after}"
+          test "${bootstrap_hash_before}" = "${bootstrap_hash_after}"
+
+          docker compose logs --no-color
 
   build-and-publish:
+    if: github.event_name != 'pull_request'
     needs:
       - validate-compose
       - smoke-test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -113,7 +163,6 @@ jobs:
       - uses: docker/setup-buildx-action@v3
 
       - name: Log in to GitHub Container Registry
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -132,13 +181,13 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
-      - name: Build and optionally publish AMD64 + ARM64
+      - name: Publish AMD64 + ARM64 under one image tag
         uses: docker/build-push-action@v6
         with:
           context: .
           target: production
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
