@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - agent/net10-mudblazor-migration
+  pull_request:
+    branches:
+      - magiccodingman/net10
   workflow_dispatch:
 
 permissions:
