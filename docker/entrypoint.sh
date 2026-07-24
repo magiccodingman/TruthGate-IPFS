@@ -45,6 +45,12 @@ config_directory="$(dirname "${TRUTHGATE_CONFIG_PATH}")"
 blocks_directory="${IPFS_PATH}/blocks"
 data_protection_directory="/data/truthgate/secrets/data-protection-keys"
 
+: "${TRUTHGATE_KUBO_SETTINGS_PATH:=${config_directory}/kubo-settings.json}"
+: "${TRUTHGATE_KUBO_OVERRIDES_PATH:=${config_directory}/kubo-overrides.json}"
+require_absolute_path TRUTHGATE_KUBO_SETTINGS_PATH "${TRUTHGATE_KUBO_SETTINGS_PATH}"
+require_absolute_path TRUTHGATE_KUBO_OVERRIDES_PATH "${TRUTHGATE_KUBO_OVERRIDES_PATH}"
+export TRUTHGATE_KUBO_SETTINGS_PATH TRUTHGATE_KUBO_OVERRIDES_PATH
+
 install -d -m 0750 -o "${truthgate_user}" -g "${truthgate_group}" \
     "${config_directory}" \
     "${TRUTHGATE_DATABASE_PATH}" \
@@ -106,7 +112,7 @@ if [[ ! -s "${TRUTHGATE_CONFIG_PATH}" ]]; then
     else
         bootstrap_password="$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')"
         umask 077
-        printf '%s' "${bootstrap_password}" > "${bootstrap_password_file}"
+        printf '%s' "${bootstrap_password}" >"${bootstrap_password_file}"
         chown "${truthgate_user}:${truthgate_group}" "${bootstrap_password_file}"
     fi
 
@@ -119,20 +125,15 @@ else
     unset TRUTHGATE_BOOTSTRAP_ADMIN_PASSWORD || true
 fi
 
-if [[ ! -s "${IPFS_PATH}/config" ]]; then
-    log "Initializing a new Kubo repository at ${IPFS_PATH}."
-    as_truthgate ipfs init
-else
-    log "Using the existing Kubo repository at ${IPFS_PATH}."
+/usr/local/bin/truthgate-configure-kubo
+
+daemon_args=(daemon --migrate=true)
+if [[ "$(<"${TMPDIR}/kubo-enable-gc")" == "true" ]]; then
+    daemon_args+=(--enable-gc)
 fi
 
-# TruthGate talks to Kubo over loopback. The RPC API is intentionally not
-# published by Compose; the gateway is likewise kept private behind TruthGate.
-as_truthgate ipfs config Addresses.API /ip4/127.0.0.1/tcp/5001
-as_truthgate ipfs config Addresses.Gateway /ip4/127.0.0.1/tcp/9010
-
 log "Starting Kubo with automatic repository migrations enabled."
-as_truthgate ipfs daemon --migrate=true &
+as_truthgate ipfs "${daemon_args[@]}" &
 ipfs_pid=$!
 
 stop_children() {
