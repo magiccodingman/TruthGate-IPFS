@@ -37,12 +37,14 @@ jobs:
           dotnet test \
             TruthGate-Web/TruthGate-Web.Tests/TruthGate-Web.Tests.csproj \
             --no-restore \
-            --no-build \
             --configuration Release \
             --logger "console;verbosity=normal" \
+            --diag tls-vstest-diag.log \
             > tls-test-output.log 2>&1
           status=$?
           echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "Test output directory:"
+          find TruthGate-Web/TruthGate-Web.Tests/bin/Release/net10.0 -maxdepth 1 -type f -printf '%f\n' | sort
           tail -n 200 tls-test-output.log
           exit 0
 
@@ -51,7 +53,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tls-test-output
-          path: tls-test-output.log
+          path: |
+            tls-test-output.log
+            tls-vstest-diag.log
           if-no-files-found: error
 
       - name: Report test failure
