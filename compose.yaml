@@ -2,7 +2,7 @@ name: truthgate
 
 services:
   truthgate:
-    image: ${TRUTHGATE_IMAGE:-ghcr.io/magiccodingman/truthgate-ipfs:master}
+    image: ${TRUTHGATE_IMAGE:-magiccodingman/truthgate-ipfs:stable}
     build:
       context: .
       dockerfile: Dockerfile
