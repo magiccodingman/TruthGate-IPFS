@@ -3,6 +3,7 @@ name: Docker repository migration
 on:
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
