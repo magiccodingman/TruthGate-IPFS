@@ -21,12 +21,17 @@ an operator explicitly overrides them.
 ## Production quick start
 
 ```bash
+git clone https://github.com/magiccodingman/TruthGate-IPFS.git
+cd TruthGate-IPFS
 cp .env.example .env
-docker compose up --build -d
+docker compose pull
+docker compose up -d
 ```
 
-Open `https://localhost` (the first connection uses TruthGate's self-signed
-fallback certificate unless a configured domain has an issued certificate).
+The default Compose image is `magiccodingman/truthgate-ipfs:stable`. Open
+`https://localhost` after the container becomes healthy. The first connection
+uses TruthGate's self-signed fallback certificate unless a configured domain
+has an issued certificate.
 
 On the first boot, retrieve the generated administrator password with:
 
@@ -38,17 +43,47 @@ The username is `admin`. Change its password in the TruthGate UI. Until the
 configuration is persisted, the bootstrap password is also retained at
 `data/truthgate/state/bootstrap-admin-password` with restrictive permissions.
 
-## Pulling the published image
+To build the production image locally instead of pulling the stable release:
 
-After the multi-platform image has been published by GitHub Actions:
+```bash
+docker compose up --build -d
+```
+
+## Published image tags
+
+A successful promotion to the protected `stable` branch runs the complete
+AMD64/ARM64 appliance, legacy-repository migration, and TLS lifecycle gates
+before Docker Hub publishing starts.
+
+The release workflow publishes:
+
+```text
+magiccodingman/truthgate-ipfs:stable
+magiccodingman/truthgate-ipfs:latest
+magiccodingman/truthgate-ipfs:0.1
+magiccodingman/truthgate-ipfs:0.1.0
+magiccodingman/truthgate-ipfs:sha-<commit>
+```
+
+`stable` and `latest` move to the newest successful stable release. The
+major/minor series tag, such as `0.1`, also moves forward. Full semantic
+versions are immutable release identifiers. `VERSION` contains the intentional
+major/minor series; every successful stable promotion automatically allocates
+the next patch version.
+
+The same multi-platform tag resolves to the correct `linux/amd64` or
+`linux/arm64` image automatically. Replacing the container does not replace
+mounted state.
+
+To update an existing deployment:
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-The same `master` tag resolves to the correct `linux/amd64` or `linux/arm64`
-image automatically. Replacing the container does not replace mounted state.
+Pin `TRUTHGATE_IMAGE` in `.env` to a full version when an installation should
+not automatically follow the moving `stable` tag.
 
 ## Persistent storage contract
 
