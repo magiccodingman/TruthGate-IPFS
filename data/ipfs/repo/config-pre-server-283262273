@@ -1,0 +1,164 @@
+{
+  "API": {
+    "HTTPHeaders": {}
+  },
+  "Addresses": {
+    "API": "/ip4/127.0.0.1/tcp/5001",
+    "Announce": [],
+    "AppendAnnounce": [],
+    "Gateway": "/ip4/127.0.0.1/tcp/9010",
+    "NoAnnounce": [],
+    "Swarm": [
+      "/ip4/0.0.0.0/tcp/4001",
+      "/ip6/::/tcp/4001",
+      "/ip4/0.0.0.0/udp/4001/webrtc-direct",
+      "/ip4/0.0.0.0/udp/4001/quic-v1",
+      "/ip4/0.0.0.0/udp/4001/quic-v1/webtransport",
+      "/ip6/::/udp/4001/webrtc-direct",
+      "/ip6/::/udp/4001/quic-v1",
+      "/ip6/::/udp/4001/quic-v1/webtransport"
+    ]
+  },
+  "AutoConf": {},
+  "AutoNAT": {},
+  "AutoTLS": {},
+  "Bitswap": {},
+  "Bootstrap": [
+    "auto"
+  ],
+  "DNS": {
+    "Resolvers": {
+      ".": "auto"
+    }
+  },
+  "Datastore": {
+    "BlockKeyCacheSize": null,
+    "BloomFilterSize": 0,
+    "GCPeriod": "1h",
+    "HashOnRead": false,
+    "Spec": {
+      "mounts": [
+        {
+          "mountpoint": "/blocks",
+          "path": "blocks",
+          "prefix": "flatfs.datastore",
+          "shardFunc": "/repo/flatfs/shard/v1/next-to-last/2",
+          "sync": false,
+          "type": "flatfs"
+        },
+        {
+          "compression": "none",
+          "mountpoint": "/",
+          "path": "datastore",
+          "prefix": "leveldb.datastore",
+          "type": "levelds"
+        }
+      ],
+      "type": "mount"
+    },
+    "StorageGCWatermark": 90,
+    "StorageMax": "10GB"
+  },
+  "Discovery": {
+    "MDNS": {
+      "Enabled": true
+    }
+  },
+  "Experimental": {
+    "FilestoreEnabled": false,
+    "Libp2pStreamMounting": false,
+    "OptimisticProvide": false,
+    "OptimisticProvideJobsPoolSize": 0,
+    "P2pHttpProxy": false,
+    "UrlstoreEnabled": false
+  },
+  "Gateway": {
+    "AllowCodecConversion": null,
+    "DeserializedResponses": null,
+    "DisableHTMLErrors": null,
+    "ExposeRoutingAPI": null,
+    "HTTPHeaders": {},
+    "NoDNSLink": false,
+    "NoFetch": false,
+    "PublicGateways": null,
+    "RootRedirect": ""
+  },
+  "HTTPRetrieval": {},
+  "Identity": {
+    "PeerID": "12D3KooWAoLbYDEXFqdSfNnDK5GuzwYcKmgS9ax9xaGGqhnCPgsN",
+    "PrivKey": "CAESQP1t+Lc/UVeGbqDaNvPgYjpkLc5Ncji/FzsH+S6NJ7IjDphT/MdOVyNprcZVBy3TW/1k5+V6bDUOW1KyDQeEyyU="
+  },
+  "Import": {
+    "BatchMaxNodes": null,
+    "BatchMaxSize": null,
+    "CidVersion": null,
+    "FastProvideDAG": null,
+    "FastProvideRoot": null,
+    "FastProvideWait": null,
+    "HashFunction": null,
+    "UnixFSChunker": null,
+    "UnixFSDAGLayout": null,
+    "UnixFSDirectoryMaxLinks": null,
+    "UnixFSFileMaxLinks": null,
+    "UnixFSHAMTDirectoryMaxFanout": null,
+    "UnixFSHAMTDirectorySizeEstimation": null,
+    "UnixFSHAMTDirectorySizeThreshold": null,
+    "UnixFSRawLeaves": null
+  },
+  "Internal": {},
+  "Ipns": {
+    "DelegatedPublishers": [
+      "auto"
+    ],
+    "RecordLifetime": "",
+    "RepublishPeriod": "",
+    "ResolveCacheSize": 128
+  },
+  "Migration": {},
+  "Mounts": {
+    "FuseAllowOther": null,
+    "IPFS": "/ipfs",
+    "IPNS": "/ipns",
+    "MFS": "/mfs",
+    "StoreMode": null,
+    "StoreMtime": null
+  },
+  "Peering": {
+    "Peers": null
+  },
+  "Pinning": {
+    "RemoteServices": {}
+  },
+  "Plugins": {
+    "Plugins": null
+  },
+  "Provide": {
+    "DHT": {}
+  },
+  "Provider": {},
+  "Pubsub": {
+    "DisableSigning": false,
+    "Router": ""
+  },
+  "Reprovider": {},
+  "Routing": {
+    "DelegatedRouters": [
+      "auto"
+    ]
+  },
+  "Swarm": {
+    "AddrFilters": null,
+    "ConnMgr": {},
+    "DisableBandwidthMetrics": false,
+    "DisableNatPortMap": false,
+    "RelayClient": {},
+    "RelayService": {},
+    "ResourceMgr": {},
+    "Transports": {
+      "Multiplexers": {},
+      "Network": {},
+      "Security": {}
+    }
+  },
+  "Version": {}
+}

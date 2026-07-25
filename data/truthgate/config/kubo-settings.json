@@ -1,0 +1,26 @@
+{
+  "serverProfile": true,
+  "routingType": "dhtserver",
+  "ensureSwarmListeners": true,
+  "holePunching": true,
+  "relayClient": true,
+  "provide": {
+    "enabled": true,
+    "strategy": "all",
+    "interval": "22h",
+    "sweepEnabled": true,
+    "resumeEnabled": true
+  },
+  "storage": {
+    "max": "auto",
+    "percent": 90,
+    "fallback": "200GB",
+    "gcWatermark": 90,
+    "enableGc": true
+  },
+  "publicAnnounce": {
+    "ipv4": "auto",
+    "ipv6": "auto",
+    "port": null
+  }
+}

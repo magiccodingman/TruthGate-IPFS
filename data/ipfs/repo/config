@@ -1,0 +1,218 @@
+{
+  "API": {
+    "HTTPHeaders": {}
+  },
+  "Addresses": {
+    "API": "/ip4/127.0.0.1/tcp/5001",
+    "Announce": [],
+    "AppendAnnounce": [
+      "/ip4/71.127.138.208/tcp/4001",
+      "/ip4/71.127.138.208/udp/4001/quic-v1",
+      "/ip4/71.127.138.208/udp/4001/quic-v1/webtransport"
+    ],
+    "Gateway": "/ip4/127.0.0.1/tcp/9010",
+    "NoAnnounce": [
+      "/ip4/10.0.0.0/ipcidr/8",
+      "/ip4/100.64.0.0/ipcidr/10",
+      "/ip4/127.0.0.0/ipcidr/8",
+      "/ip4/169.254.0.0/ipcidr/16",
+      "/ip4/172.16.0.0/ipcidr/12",
+      "/ip4/192.0.0.0/ipcidr/24",
+      "/ip4/192.0.2.0/ipcidr/24",
+      "/ip4/192.168.0.0/ipcidr/16",
+      "/ip4/198.18.0.0/ipcidr/15",
+      "/ip4/198.51.100.0/ipcidr/24",
+      "/ip4/203.0.113.0/ipcidr/24",
+      "/ip4/240.0.0.0/ipcidr/4",
+      "/ip6/::/ipcidr/3",
+      "/ip6/::1/ipcidr/128",
+      "/ip6/100::/ipcidr/64",
+      "/ip6/2001:2::/ipcidr/48",
+      "/ip6/2001:db8::/ipcidr/32",
+      "/ip6/fc00::/ipcidr/7",
+      "/ip6/fe80::/ipcidr/10"
+    ],
+    "Swarm": [
+      "/ip4/0.0.0.0/tcp/4001",
+      "/ip6/::/tcp/4001",
+      "/ip4/0.0.0.0/udp/4001/webrtc-direct",
+      "/ip4/0.0.0.0/udp/4001/quic-v1",
+      "/ip4/0.0.0.0/udp/4001/quic-v1/webtransport",
+      "/ip6/::/udp/4001/webrtc-direct",
+      "/ip6/::/udp/4001/quic-v1",
+      "/ip6/::/udp/4001/quic-v1/webtransport"
+    ]
+  },
+  "AutoConf": {},
+  "AutoNAT": {},
+  "AutoTLS": {},
+  "Bitswap": {},
+  "Bootstrap": [
+    "auto"
+  ],
+  "DNS": {
+    "Resolvers": {
+      ".": "auto"
+    }
+  },
+  "Datastore": {
+    "BlockKeyCacheSize": null,
+    "BloomFilterSize": 0,
+    "GCPeriod": "1h",
+    "HashOnRead": false,
+    "Spec": {
+      "mounts": [
+        {
+          "mountpoint": "/blocks",
+          "path": "blocks",
+          "prefix": "flatfs.datastore",
+          "shardFunc": "/repo/flatfs/shard/v1/next-to-last/2",
+          "sync": false,
+          "type": "flatfs"
+        },
+        {
+          "compression": "none",
+          "mountpoint": "/",
+          "path": "datastore",
+          "prefix": "leveldb.datastore",
+          "type": "levelds"
+        }
+      ],
+      "type": "mount"
+    },
+    "StorageGCWatermark": 90,
+    "StorageMax": "1640041743974B"
+  },
+  "Discovery": {
+    "MDNS": {
+      "Enabled": false
+    }
+  },
+  "Experimental": {
+    "FilestoreEnabled": false,
+    "Libp2pStreamMounting": false,
+    "OptimisticProvide": false,
+    "OptimisticProvideJobsPoolSize": 0,
+    "P2pHttpProxy": false,
+    "UrlstoreEnabled": false
+  },
+  "Gateway": {
+    "AllowCodecConversion": null,
+    "DeserializedResponses": null,
+    "DisableHTMLErrors": null,
+    "ExposeRoutingAPI": null,
+    "HTTPHeaders": {},
+    "NoDNSLink": false,
+    "NoFetch": false,
+    "PublicGateways": null,
+    "RootRedirect": ""
+  },
+  "HTTPRetrieval": {},
+  "Identity": {
+    "PeerID": "12D3KooWAoLbYDEXFqdSfNnDK5GuzwYcKmgS9ax9xaGGqhnCPgsN",
+    "PrivKey": "CAESQP1t+Lc/UVeGbqDaNvPgYjpkLc5Ncji/FzsH+S6NJ7IjDphT/MdOVyNprcZVBy3TW/1k5+V6bDUOW1KyDQeEyyU="
+  },
+  "Import": {
+    "BatchMaxNodes": null,
+    "BatchMaxSize": null,
+    "CidVersion": null,
+    "FastProvideDAG": null,
+    "FastProvideRoot": null,
+    "FastProvideWait": null,
+    "HashFunction": null,
+    "UnixFSChunker": null,
+    "UnixFSDAGLayout": null,
+    "UnixFSDirectoryMaxLinks": null,
+    "UnixFSFileMaxLinks": null,
+    "UnixFSHAMTDirectoryMaxFanout": null,
+    "UnixFSHAMTDirectorySizeEstimation": null,
+    "UnixFSHAMTDirectorySizeThreshold": null,
+    "UnixFSRawLeaves": null
+  },
+  "Internal": {},
+  "Ipns": {
+    "DelegatedPublishers": [
+      "auto"
+    ],
+    "RecordLifetime": "",
+    "RepublishPeriod": "",
+    "ResolveCacheSize": 128
+  },
+  "Migration": {},
+  "Mounts": {
+    "FuseAllowOther": null,
+    "IPFS": "/ipfs",
+    "IPNS": "/ipns",
+    "MFS": "/mfs",
+    "StoreMode": null,
+    "StoreMtime": null
+  },
+  "Peering": {
+    "Peers": null
+  },
+  "Pinning": {
+    "RemoteServices": {}
+  },
+  "Plugins": {
+    "Plugins": null
+  },
+  "Provide": {
+    "DHT": {
+      "Interval": "22h",
+      "ResumeEnabled": true,
+      "SweepEnabled": true
+    },
+    "Enabled": true,
+    "Strategy": "all"
+  },
+  "Provider": {},
+  "Pubsub": {
+    "DisableSigning": false,
+    "Router": ""
+  },
+  "Reprovider": {},
+  "Routing": {
+    "DelegatedRouters": [
+      "auto"
+    ],
+    "Type": "dhtserver"
+  },
+  "Swarm": {
+    "AddrFilters": [
+      "/ip4/10.0.0.0/ipcidr/8",
+      "/ip4/100.64.0.0/ipcidr/10",
+      "/ip4/127.0.0.0/ipcidr/8",
+      "/ip4/169.254.0.0/ipcidr/16",
+      "/ip4/172.16.0.0/ipcidr/12",
+      "/ip4/192.0.0.0/ipcidr/24",
+      "/ip4/192.0.2.0/ipcidr/24",
+      "/ip4/192.168.0.0/ipcidr/16",
+      "/ip4/198.18.0.0/ipcidr/15",
+      "/ip4/198.51.100.0/ipcidr/24",
+      "/ip4/203.0.113.0/ipcidr/24",
+      "/ip4/240.0.0.0/ipcidr/4",
+      "/ip6/::/ipcidr/3",
+      "/ip6/::1/ipcidr/128",
+      "/ip6/100::/ipcidr/64",
+      "/ip6/2001:2::/ipcidr/48",
+      "/ip6/2001:db8::/ipcidr/32",
+      "/ip6/fc00::/ipcidr/7",
+      "/ip6/fe80::/ipcidr/10"
+    ],
+    "ConnMgr": {},
+    "DisableBandwidthMetrics": false,
+    "DisableNatPortMap": true,
+    "EnableHolePunching": true,
+    "RelayClient": {
+      "Enabled": true
+    },
+    "RelayService": {},
+    "ResourceMgr": {},
+    "Transports": {
+      "Multiplexers": {},
+      "Network": {},
+      "Security": {}
+    }
+  },
+  "Version": {}
+}
