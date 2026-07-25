@@ -15,6 +15,8 @@ A conforming TGP v1 IPNS root MUST provide:
 
 The path is relative to the root resolved by the IPNS identity.
 
+A root MAY also contain an `index.html` browser helper or other non-normative files. Clients MUST NOT require those files to resolve the pointer.
+
 ## 2. Media type and encoding
 
 `tgp.json` MUST be valid UTF-8 JSON.
@@ -34,8 +36,7 @@ Example:
   "tgp": 1,
   "ts": "2026-07-25T17:00:00Z",
   "current": "bafy...",
-  "domainName": "example.com",
-  "legal": "/legal.md"
+  "domainName": "example.com"
 }
 ```
 
@@ -76,19 +77,6 @@ The target MUST identify an IPFS content path. A v1 client MUST NOT invent a tar
 
 The primary associated DNS name. Clients MUST NOT treat this unsigned field separately from the trust provided by the resolved IPNS record.
 
-### `legal`
-
-- Type: string
-- Required: no
-
-A path to an informational notice, normally:
-
-```text
-/legal.md
-```
-
-The notice MUST NOT be required for pointer resolution.
-
 ### Unknown fields
 
 Clients MUST ignore unknown fields so compatible metadata can be added without breaking v1 readers.
@@ -126,21 +114,21 @@ A client MAY retain a last-known-good target for availability, but SHOULD indica
 - malformed JSON: fail;
 - unsupported version: fail;
 - missing or empty `current`: fail;
-- invalid target: fail;
-- missing legal notice: continue resolution.
+- invalid target: fail.
 
 Clients MUST NOT guess a CID from unrelated files.
 
-## 7. Optional files
+## 7. Optional browser helper
+
+A TGP root MAY provide:
 
 ```text
 /index.html
-/legal.md
 ```
 
-`index.html` MAY provide browser-oriented resolution.
+The browser helper MAY fetch `tgp.json`, select an appropriate route, and navigate or render the current target.
 
-`legal.md` MAY provide operator information and limitations.
+It MUST NOT change the machine-readable meaning of `tgp.json`, and clients MUST NOT require it for protocol resolution.
 
 ## 8. JSON Schema
 
@@ -165,9 +153,6 @@ Clients MUST NOT guess a CID from unrelated files.
       "minLength": 3
     },
     "domainName": {
-      "type": "string"
-    },
-    "legal": {
       "type": "string"
     }
   }

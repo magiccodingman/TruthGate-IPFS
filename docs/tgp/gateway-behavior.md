@@ -8,10 +8,10 @@ For a TGP-backed IPNS host:
 
 1. resolve and validate `tgp.json`;
 2. identify the current target;
-3. serve or redirect to that target;
+3. serve, embed, or redirect to that target according to gateway policy;
 4. use short caching for the pointer;
 5. use normal immutable caching for the target;
-6. expose the optional legal notice;
+6. support a browser fallback when the TGP root provides one;
 7. reject malformed pointers rather than guessing.
 
 ## Current-target restriction
@@ -20,18 +20,27 @@ A gateway MAY restrict the TGP host to the CID advertised by `current`.
 
 This prevents the same host from becoming a general-purpose path to unrelated or previously advertised CIDs.
 
-It does not prevent users from fetching a known old CID through another gateway or node.
+It does not prevent users from fetching a known old CID through another gateway or node, and it does not remove that CID from any repository.
 
 ## Browser fallback
 
-An optional `index.html` can fetch `tgp.json` and redirect.
+An optional `index.html` can fetch `tgp.json` and choose an appropriate destination.
+
+A browser helper may:
+
+- detect an IPFS-aware browser environment;
+- navigate directly to `/ipfs/<current>`;
+- try a configured Web2 destination;
+- use a gateway or redirect document;
+- provide direct recovery links when extensions or blockers interfere.
 
 The fallback should:
 
-- avoid arbitrary URL redirects;
+- avoid arbitrary unvalidated URL redirects;
 - identify stale fallback behavior;
 - preserve subpaths only when deliberately specified;
-- fail clearly when the pointer is invalid.
+- fail clearly when the pointer is invalid;
+- remain optional for machine clients.
 
 ## Caches
 
