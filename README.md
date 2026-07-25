@@ -25,9 +25,18 @@ container. Application state, Kubo repository metadata, and Kubo blocks are
 persisted separately by default.
 
 ```bash
+git clone https://github.com/magiccodingman/TruthGate-IPFS.git
+cd TruthGate-IPFS
 cp .env.example .env
-docker compose up --build -d
+docker compose pull
+docker compose up -d
 docker compose logs truthgate
+```
+
+The default Compose image is the tested multi-platform stable release:
+
+```text
+magiccodingman/truthgate-ipfs:stable
 ```
 
 The first-start logs contain a generated password for the `admin` account.
@@ -43,9 +52,15 @@ overrides. Inspect the live node with:
 docker exec truthgate truthgate-kubo-status
 ```
 
-For the full persistence contract, Kubo settings, image update flow,
-ARM64/AMD64 publishing, and Docker-based development setup, see
+For the full persistence contract, Kubo settings, release tags, image update
+flow, ARM64/AMD64 publishing, and Docker-based development setup, see
 **[DOCKER.md](DOCKER.md)**.
+
+To build the production image locally instead of pulling the stable release:
+
+```bash
+docker compose up --build -d
+```
 
 Development with hot reload uses the production definition plus a small
 override:
