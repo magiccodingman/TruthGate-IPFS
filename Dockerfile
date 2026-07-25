@@ -26,6 +26,21 @@ RUN dotnet publish TruthGate-Web/TruthGate-Web/TruthGate-Web.csproj \
     --output /out \
     /p:UseAppHost=false
 
+# .NET 10 publishes the Blazor bootstrap as a static web asset instead of an
+# embedded framework resource. Fail the image build if restore/publish ever
+# omits it, because the portal would otherwise render static HTML while every
+# interactive server component silently remains inactive.
+RUN set -eu; \
+    manifest=/out/TruthGate-Web.staticwebassets.endpoints.json; \
+    test -s "${manifest}"; \
+    grep -q '"Route":"_framework/blazor\.web\.js"' "${manifest}"; \
+    asset="$(find /out/wwwroot/_framework -maxdepth 1 -type f \
+        \( -name 'blazor.web.js' -o -name 'blazor.web.*.js' \) \
+        -size +10000c -print -quit)"; \
+    test -n "${asset}"; \
+    printf 'Verified Blazor bootstrap asset: %s (%s bytes)\n' \
+        "${asset}" "$(wc -c <"${asset}")"
+
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION}-resolute AS runtime-base
 ARG TRUTHGATE_UID
 ARG TRUTHGATE_GID
