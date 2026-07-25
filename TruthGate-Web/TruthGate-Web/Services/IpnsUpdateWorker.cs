@@ -1,9 +1,8 @@
-﻿using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using TruthGate_Web.Endpoints;
 using TruthGate_Web.Models;
 using TruthGate_Web.Utils;
@@ -43,11 +42,10 @@ namespace TruthGate_Web.Services
         private readonly IpnsUpdateOptions _opts;
         private readonly IApiKeyProvider _keys;
 
-        private static readonly Regex VersionRx = new(@"-v(?<n>\d+)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
         private const string ManagedRoot = "/production/pinned";
         private const string StagingRoot = "/production/.staging/ipns";
-        private const string TgpMetaFile = "tgp.json"; // lives in each version folder
+        private const string TgpPointerFile = "tgp.json";
+        private const string LegacyTgpMetaFile = ".tgp-meta.json";
 
         // concurrency
         private readonly SemaphoreSlim _globalSlots;
@@ -79,34 +77,13 @@ namespace TruthGate_Web.Services
 
             _globalSlots = new SemaphoreSlim(_opts.MaxConcurrency, _opts.MaxConcurrency);
         }
-        private sealed record VersionEntry(int N, string Name, string Path, string Cid, bool IsConnected);
-
-        private async Task<(VersionEntry? Pointer, VersionEntry? Connected)> GetLatestVersionPairAsync(string name, CancellationToken ct)
+        private async Task<(IpnsVersionRetention.VersionEntry? Pointer, IpnsVersionRetention.VersionEntry? Connected)> GetLatestVersionPairAsync(
+            string name,
+            CancellationToken ct)
         {
             var children = await ListMfsChildrenAsync(ManagedRoot, ct);
-            var prefix = $"{name}-v";
-            VersionEntry? latestPointer = null;
-            VersionEntry? latestConnected = null;
-
-            foreach (var kv in children)
-            {
-                if (!kv.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
-                var m = VersionRx.Match(kv.Key);
-                if (!m.Success || !int.TryParse(m.Groups["n"].Value, out var n)) continue;
-
-                var isConnected = kv.Key.EndsWith("-connected", StringComparison.OrdinalIgnoreCase);
-                var entry = new VersionEntry(n, kv.Key, kv.Value.Path, kv.Value.Cid, isConnected);
-
-                if (isConnected)
-                {
-                    if (latestConnected is null || n > latestConnected.N) latestConnected = entry;
-                }
-                else
-                {
-                    if (latestPointer is null || n > latestPointer.N) latestPointer = entry;
-                }
-            }
-            return (latestPointer, latestConnected);
+            var latest = IpnsVersionRetention.GetLatestPointerPair(name, children);
+            return (latest?.Pointer, latest?.Connected);
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -338,13 +315,6 @@ namespace TruthGate_Web.Services
             => _perKeyLocks.GetOrAdd(name ?? string.Empty, _ => new SemaphoreSlim(1, 1));
 
         // ---------- TGP helpers ----------
-        private sealed class TgpMeta
-        {
-            public string Kind { get; set; } = "tgp";
-            public string? PointerCid { get; set; }
-            public string? TargetCid { get; set; }
-        }
-
         private async Task<string?> TryReadTgpTargetCidAsync(string pointerCid, CancellationToken ct)
         {
             try
@@ -484,16 +454,7 @@ namespace TruthGate_Web.Services
         private async Task<int> ComputeNextVersionAsync(string name, CancellationToken ct)
         {
             var children = await ListMfsChildrenAsync(ManagedRoot, ct);
-            var prefix = $"{name}-v";
-            var max = 0;
-            foreach (var k in children.Keys)
-            {
-                if (!k.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
-                var m = VersionRx.Match(k);
-                if (m.Success && int.TryParse(m.Groups["n"].Value, out var n))
-                    max = Math.Max(max, n);
-            }
-            return max + 1;
+            return IpnsVersionRetention.ComputeNextVersion(name, children.Keys);
         }
         private async Task FilesWriteTextAsync(string mfsPath, string text, CancellationToken ct)
         {
@@ -513,48 +474,52 @@ namespace TruthGate_Web.Services
         private async Task RemoveAllButLatestAsync(string name, CancellationToken ct)
         {
             var children = await ListMfsChildrenAsync(ManagedRoot, ct);
-            var prefix = $"{name}-v";
-            var versions = new List<(int n, string path, string cid)>();
-            foreach (var kv in children)
-            {
-                if (!kv.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
-                var m = VersionRx.Match(kv.Key);
-                if (!m.Success || !int.TryParse(m.Groups["n"].Value, out var n)) continue;
-                versions.Add((n, kv.Value.Path, kv.Value.Cid));
-            }
-            if (versions.Count <= 1) return;
+            var pairs = IpnsVersionRetention.GroupVersions(name, children);
+            var latest = IpnsVersionRetention.GetLatestPointerPair(pairs);
+            if (latest is null) return;
 
-            var latest = versions.OrderByDescending(v => v.n).First();
-            foreach (var v in versions.Where(v => v.n != latest.n))
+            var targetCidsByVersion = new Dictionary<int, string?>();
+            foreach (var pair in pairs)
+            {
+                string? targetCid = pair.Connected?.Cid;
+                if (string.IsNullOrWhiteSpace(targetCid) && pair.Pointer is not null)
+                {
+                    var tgpJson = await FilesReadAllTextAsync($"{pair.Pointer.Path}/{TgpPointerFile}", ct);
+                    targetCid = IpnsVersionRetention.TryReadTgpCurrentCid(tgpJson);
+
+                    if (string.IsNullOrWhiteSpace(targetCid))
+                    {
+                        var legacyJson = await FilesReadAllTextAsync($"{pair.Pointer.Path}/{LegacyTgpMetaFile}", ct);
+                        targetCid = IpnsVersionRetention.TryReadLegacyTargetCid(legacyJson);
+                    }
+                }
+
+                targetCidsByVersion[pair.Version] = targetCid;
+            }
+
+            var plan = IpnsVersionRetention.BuildPrunePlan(pairs, latest.Version, targetCidsByVersion);
+
+            foreach (var path in plan.PathsToRemove)
             {
                 try
                 {
-                    // Read sidecar to learn any extra CIDs (TGP target) to unpin
-                    string? metaJson = await FilesReadAllTextAsync($"{v.path}/{TgpMetaFile}", ct);
-                    string? tgpTarget = null;
-                    if (!string.IsNullOrWhiteSpace(metaJson))
-                    {
-                        try
-                        {
-                            var m = JsonSerializer.Deserialize<TgpMeta>(metaJson);
-                            if (m?.TargetCid is string s && !string.IsNullOrWhiteSpace(s))
-                                tgpTarget = s.Trim();
-                        }
-                        catch { /* ignore */ }
-                    }
-
-                    // Remove folder then unpin both pointer and (if present) target
-                    await FilesRmRecursiveAsync(v.path, ct);
-                    await PinRmRecursiveAsync(v.cid, ct);
-                    if (!string.IsNullOrWhiteSpace(tgpTarget))
-                    {
-                        try { await PinRmRecursiveAsync(tgpTarget!, ct); }
-                        catch (Exception ex) { _log.LogWarning(ex, "Failed to unpin TGP target for {Name}-v{Version}", name, v.n); }
-                    }
+                    await FilesRmRecursiveAsync(path, ct);
                 }
                 catch (Exception ex)
                 {
-                    _log.LogWarning(ex, "Failed to remove old version {Name}-v{Version}.", name, v.n);
+                    _log.LogWarning(ex, "Failed to remove old IPNS version path {Path} for {Name}.", path, name);
+                }
+            }
+
+            foreach (var cid in plan.CidsToUnpin)
+            {
+                try
+                {
+                    await PinRmRecursiveAsync(cid, ct);
+                }
+                catch (Exception ex)
+                {
+                    _log.LogWarning(ex, "Failed to unpin old IPNS version CID {Cid} for {Name}.", cid, name);
                 }
             }
         }
