@@ -53,11 +53,13 @@ An operator can subscribe to an IPNS name and let TruthGate resolve it on a sche
 
 ### TruthGate Pointer protocol
 
-TruthGate supports the **TruthGate Pointer protocol (TGP)**: a deliberately small convention in which an IPNS identity publishes a tiny `tgp.json` file that points to one current immutable CID.
+TruthGate supports the **TruthGate Pointer protocol (TGP)**: a small structured layer in which an IPNS identity publishes a lightweight control bundle whose `tgp.json` points to the current immutable application CID.
 
-TGP keeps the mutable layer light, makes freshness checks inexpensive, allows the current target to be cached normally, and supports clear unpin-and-garbage-collection workflows when content is removed. It intentionally does not publish a browsable history through the pointer.
+TGP deliberately trades one additional resolution hop for a predictable machine-readable pointer, inexpensive freshness checks, normal immutable caching of the application, a browser-capable `index.html` fallback, and a stable place for future routing behavior. The public IPNS location can guide IPFS-aware browsers, ordinary browsers, and fallback routes without making the full application DAG serve as the control record.
 
-TGP is an operational protocol, not a legal shield. It cannot erase copies retained by third parties, prevent archiving, or make an operator immune from legal obligations. See the [TGP documentation](docs/tgp/index.md) for the specification, rationale, gateway behavior, and legal limitations.
+IPNS can already move to a new CID, and Kubo can already unpin and garbage-collect old content. TGP does not create those capabilities. Its retention benefit is that it gives TruthGate a consistent boundary around which current-only, bounded-history, selected-release, or archival policies can be expressed and automated. Updating a pointer alone does not delete older CIDs or copies retained by other nodes.
+
+See the [TGP documentation](docs/tgp/index.md) for the rationale, wire specification, client resolution, publisher workflow, and gateway behavior.
 
 ### Static-site publishing
 
@@ -135,7 +137,7 @@ The documentation describes the current defaults and their limits without preten
 - TruthGate does not replace IPFS or Kubo.
 - TruthGate is not a blockchain or a new content network.
 - TruthGate does not make third-party copies of a CID disappear.
-- TGP does not provide legal immunity or guaranteed global deletion.
+- TGP does not make old CIDs globally revocable or replace Kubo pin and garbage-collection operations.
 - A mapped HTTPS domain is still an HTTP delivery path; the content remains independently addressable by CID.
 - TruthGate is not intended to expose Kubo's unrestricted local RPC interface directly to anonymous internet users.
 

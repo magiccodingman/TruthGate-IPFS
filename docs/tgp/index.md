@@ -1,43 +1,58 @@
 # TruthGate Pointer protocol
 
-The **TruthGate Pointer protocol (TGP)** is a small convention for using an IPNS identity to advertise one current immutable IPFS target.
+The **TruthGate Pointer protocol (TGP)** is a small convention for publishing a structured control bundle through an IPNS identity. Its required `tgp.json` file identifies one current immutable IPFS target.
 
-An IPNS root contains a required `tgp.json` file. Clients read the pointer and then load the CID in `current`.
+```text
+IPNS identity
+      │
+      ▼
+TGP control bundle
+├── tgp.json      required machine-readable pointer
+└── index.html    optional browser resolver and fallback
+      │
+      ▼
+current application CID
+```
 
 ```json
 {
   "tgp": 1,
   "ts": "2026-07-25T17:00:00Z",
   "current": "bafy...",
-  "domainName": "example.com",
-  "legal": "/legal.md"
+  "domainName": "example.com"
 }
 ```
 
-## Why it matters
+## Why use an extra hop?
 
-TGP keeps the mutable object tiny while the application remains immutable and cacheable.
+IPNS can already point directly at an application CID. TGP deliberately adds one content-resolution hop to gain a stable, predictable control layer.
 
-It supports:
+That layer supports:
 
-- inexpensive freshness checks;
-- one current target;
-- simple client resolution;
-- ordinary caching of the immutable CID;
-- unpin and garbage-collection workflows;
-- gateway policies that only serve the advertised target;
-- clear separation between current deployment and off-pointer audit history.
+- a tiny document for inexpensive freshness checks;
+- an explicit current application target;
+- normal immutable caching after resolution;
+- a browser-capable fallback location at the IPNS root;
+- consistent behavior for IPFS-aware and ordinary browsers;
+- gateway policies based on a known pointer contract;
+- explicit current-only, bounded-history, selected-release, or archival retention policies;
+- room for future routing and fallback metadata without changing the application DAG.
 
-## What it does not do
+## Relationship to IPNS and Kubo
 
-TGP cannot:
+TGP does not replace IPNS. IPNS supplies the signed mutable identity, sequence handling, routing, and name resolution.
 
-- erase blocks held by another node;
-- revoke a CID globally;
-- prevent caches, mirrors, archives, screenshots, or copies;
-- guarantee that deleted content becomes undiscoverable;
-- provide legal immunity;
-- replace legal advice or an operator's compliance obligations.
+TGP also does not create deletion or garbage collection. A direct IPNS publisher can already update the name, remove old pins and references, and allow Kubo to garbage-collect eligible local blocks.
+
+TGP's retention benefit is organizational: TruthGate receives a consistent boundary around which retention policy and deployment lifecycle can be expressed, automated, monitored, and verified independently from the application content itself.
+
+## Technical limits
+
+- Updating `tgp.json` does not delete an older CID.
+- Removing local content requires handling every pin and reference that retains it.
+- Other nodes, gateways, caches, mirrors, or users may retain copies independently.
+- TGP does not make CIDs globally revocable.
+- The pointer bundle is an additional IPFS object and resolution hop.
 
 ## Documentation
 
@@ -46,8 +61,6 @@ TGP cannot:
 - [Client resolution](client-resolution.md)
 - [Publisher workflow](publisher-workflow.md)
 - [Gateway behavior](gateway-behavior.md)
-- [Legal considerations](legal-considerations.md)
-- [Legal-notice template](legal-notice-template.md)
 - [FAQ](faq.md)
 
 ## Version terminology
