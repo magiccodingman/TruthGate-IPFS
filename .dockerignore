@@ -1,0 +1,17 @@
+.git
+.github
+.idea
+.vs
+.env
+.env.*
+!.env.example
+**/bin
+**/obj
+**/TestResults
+**/*.user
+**/*.suo
+coverage
+artifacts
+data
+Test.TruthGate
+TruthGate-Web/TruthGate-Web.Tests

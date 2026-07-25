@@ -1,8 +1,12 @@
-﻿namespace TruthGate_Web.Models
+using TruthGate_Web.Utils;
+
+namespace TruthGate_Web.Models
 {
     public class Config
     {
         public const string DefaultAdminHash = "/EUxvODjrpkTKnal6nVEAh2m+52H4OgXGEBLcE3xilcgZ8gbeE5ay/CfzYr9PCJ0";
+        public const string BootstrapAdminPasswordEnvironmentVariable = "TRUTHGATE_BOOTSTRAP_ADMIN_PASSWORD";
+
         private List<UserAccount>? _users;
         public IpnsWildCardSubDomain IpnsWildCardSubDomain { get; set; }
         public List<EdgeDomain> Domains { get; set; } = new List<EdgeDomain>();
@@ -29,7 +33,7 @@
                     _users.Add(new UserAccount
                     {
                         UserName = "admin",
-                        PasswordHashed = DefaultAdminHash
+                        PasswordHashed = CreateInitialAdminHash()
                     });
                 }
 
@@ -41,6 +45,14 @@
                 _users = value is null ? new List<UserAccount>() : new List<UserAccount>(value);
             }
         }
+
+        private static string CreateInitialAdminHash()
+        {
+            var bootstrapPassword = Environment.GetEnvironmentVariable(BootstrapAdminPasswordEnvironmentVariable);
+            return string.IsNullOrWhiteSpace(bootstrapPassword)
+                ? DefaultAdminHash
+                : StringHasher.HashString(bootstrapPassword);
+        }
     }
 
     public class IpnsWildCardSubDomain
@@ -49,7 +61,7 @@
         public string UseSSL { get; set; } = "true";
     }
 
-        public class EdgeDomain
+    public class EdgeDomain
     {
         public string Domain { get; set; } = "";
         public string UseSSL { get; set; } = "false";
@@ -75,6 +87,7 @@
         public string Name { get; set; }
         public string KeyHashed { get; set; }
     }
+
     public class UserAccount
     {
         public string UserName { get; set; }
