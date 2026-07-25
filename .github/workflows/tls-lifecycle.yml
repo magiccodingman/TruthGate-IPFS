@@ -11,6 +11,10 @@ on:
     paths:
       - "TruthGate-Web/**"
       - ".github/workflows/tls-lifecycle.yml"
+  workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
   test:
