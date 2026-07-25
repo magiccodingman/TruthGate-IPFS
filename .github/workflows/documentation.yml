@@ -1,0 +1,34 @@
+name: Documentation
+
+on:
+  pull_request:
+    paths:
+      - "README.md"
+      - "DOCKER.md"
+      - "docs/**"
+      - "content/images/demo/**"
+      - "scripts/check-docs.py"
+      - ".github/workflows/documentation.yml"
+  push:
+    branches:
+      - master
+    paths:
+      - "README.md"
+      - "DOCKER.md"
+      - "docs/**"
+      - "content/images/demo/**"
+      - "scripts/check-docs.py"
+      - ".github/workflows/documentation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate documentation
+        run: python3 scripts/check-docs.py
