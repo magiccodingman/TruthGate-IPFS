@@ -1,4 +1,6 @@
-# TruthGate
+# TruthGate (BETA) THIS IS ARCHIVED!
+
+Please refer to the archived /docs folder within the released repository for the old documentation. It might look a bit janky. Sorry. This is being archived as the project after this version is too alien.
 
 
 > The Secure, Self-Hosted Edge Gateway IPFS Always Needed, with Logins, API Keys, GUI Control, and Web3 Site Publishing.  
