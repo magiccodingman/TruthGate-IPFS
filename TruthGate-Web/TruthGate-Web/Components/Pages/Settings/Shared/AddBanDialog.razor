@@ -10,7 +10,7 @@
             <MudText Typo="Typo.body1" Class="mb-2">@Message</MudText>
         }
 
-        <MudForm @ref="_form" Validation="Validate">
+        <MudForm @ref="_form">
             <MudStack Spacing="2">
                 <MudSwitch @bind-Value="_usePrefix" Color="Color.Primary" Label="Use IPv6 /64 Prefix?" />
 
@@ -19,6 +19,7 @@
                               Placeholder="@(_usePrefix ? "2001:db8::/64" : "203.0.113.42 or ::ffff:203.0.113.42")"
                               Immediate="true"
                               Required="true"
+                              Validation="@(new Func<string?, string?>(ValidateTarget))"
                               @onkeydown="OnKeyDown" />
 
                 <MudSelect T="RateScope" @bind-Value="_scope" Label="Scope" Variant="Variant.Outlined" Dense="true" Class="w-56">
@@ -30,7 +31,13 @@
 
                 <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
                     <MudSwitch @bind-Value="_trueBan" Color="Color.Error" Label="TRUE ban?" />
-                    <MudNumericField T="int" @bind-Value="_durationMinutes" Label="Duration (minutes)" Min="1" Variant="Variant.Outlined" Class="w-44" />
+                    <MudNumericField T="int"
+                                     @bind-Value="_durationMinutes"
+                                     Label="Duration (minutes)"
+                                     Min="1"
+                                     Validation="@(new Func<int, string?>(ValidateDuration))"
+                                     Variant="Variant.Outlined"
+                                     Class="w-44" />
                 </MudStack>
 
                 <MudTextField @bind-Value="_reason"
@@ -74,7 +81,7 @@
     private bool _usePrefix;
     private string? _target;
     private RateScope _scope;
-    private bool _trueBan {get;set;} = true;
+    private bool _trueBan { get; set; } = true;
     private int _durationMinutes;
     private string _reason = "MANUAL_BAN";
     private string? _error;
@@ -87,59 +94,57 @@
         _reason = string.IsNullOrWhiteSpace(ReasonDefault) ? "MANUAL_BAN" : ReasonDefault;
     }
 
-    private IEnumerable<string> Validate()
+    private string? ValidateTarget(string? value)
     {
         _error = null;
 
-        if (string.IsNullOrWhiteSpace(_target))
-        {
-            _error = "Please provide a target.";
-            yield return _error!;
-            yield break;
-        }
+        if (string.IsNullOrWhiteSpace(value))
+            return _error = "Please provide a target.";
 
-        var t = _target.Trim();
-
+        var target = value.Trim();
         if (_usePrefix)
         {
-            // Accept "2001:db8::" or "2001:db8::/64" — the service canonicalizes either
-            var bare = t.Contains('/') ? t[..t.IndexOf('/')] : t;
-            if (!IPAddress.TryParse(bare, out var parsed) || parsed.AddressFamily != System.Net.Sockets.AddressFamily.InterNetworkV6)
+            // Accept "2001:db8::" or "2001:db8::/64" — the service canonicalizes either.
+            var slash = target.IndexOf('/');
+            var bare = slash >= 0 ? target[..slash] : target;
+            if (!IPAddress.TryParse(bare, out var parsed) ||
+                parsed.AddressFamily != System.Net.Sockets.AddressFamily.InterNetworkV6)
             {
-                _error = "Invalid IPv6 prefix format.";
-                yield return _error!;
+                return _error = "Invalid IPv6 prefix format.";
             }
         }
-        else
+        else if (!IPAddress.TryParse(target, out _))
         {
-            if (!IPAddress.TryParse(t, out _))
-            {
-                _error = "Invalid IP address.";
-                yield return _error!;
-            }
+            return _error = "Invalid IP address.";
         }
 
-        if (_durationMinutes <= 0)
-        {
-            _error = "Duration must be at least 1 minute.";
-            yield return _error!;
-        }
+        return null;
+    }
+
+    private string? ValidateDuration(int value)
+    {
+        if (value <= 0)
+            return _error = "Duration must be at least 1 minute.";
+
+        return null;
     }
 
     private async Task Submit()
     {
-        await _form.Validate();
+        await _form.ValidateAsync();
         if (!_form.IsValid) return;
 
         try
         {
-            var t = _target!.Trim();
-            var dur = TimeSpan.FromMinutes(_durationMinutes);
-            var reason = string.IsNullOrWhiteSpace(_reason) ? (_usePrefix ? "MANUAL_PREFIX_BAN" : "MANUAL_BAN") : _reason;
+            var target = _target!.Trim();
+            var duration = TimeSpan.FromMinutes(_durationMinutes);
+            var reason = string.IsNullOrWhiteSpace(_reason)
+                ? (_usePrefix ? "MANUAL_PREFIX_BAN" : "MANUAL_BAN")
+                : _reason;
 
-            bool ok = _usePrefix
-                ? await RateSvc.BanIpv6PrefixAsync(t, dur, _scope, _trueBan, reason)
-                : await RateSvc.BanIpAsync(t, dur, _scope, _trueBan, reason);
+            var ok = _usePrefix
+                ? await RateSvc.BanIpv6PrefixAsync(target, duration, _scope, _trueBan, reason)
+                : await RateSvc.BanIpAsync(target, duration, _scope, _trueBan, reason);
 
             if (ok)
             {

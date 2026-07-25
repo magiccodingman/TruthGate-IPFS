@@ -1,0 +1,79 @@
+name: truthgate
+
+services:
+  truthgate:
+    image: ${TRUTHGATE_IMAGE:-magiccodingman/truthgate-ipfs:stable}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+      args:
+        DOTNET_VERSION: ${DOTNET_VERSION:-10.0}
+        KUBO_VERSION: ${KUBO_VERSION:-v0.42.0}
+        TRUTHGATE_UID: ${TRUTHGATE_UID:-1000}
+        TRUTHGATE_GID: ${TRUTHGATE_GID:-1000}
+    container_name: ${TRUTHGATE_CONTAINER_NAME:-truthgate}
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: "0"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      DOTNET_ENVIRONMENT: Production
+      IPFS_PATH: /data/ipfs/repo
+      IPFS_SWARM_PORT: ${IPFS_SWARM_PORT:-4001}
+      TMPDIR: /run/truthgate
+      TRUTHGATE_ACME_STAGING: ${TRUTHGATE_ACME_STAGING:-false}
+      TRUTHGATE_CERT_IPS: ${TRUTHGATE_CERT_IPS:-}
+      TRUTHGATE_CERT_PATH: /data/truthgate/certificates
+      TRUTHGATE_CONFIG_PATH: /data/truthgate/config/config.json
+      TRUTHGATE_DATABASE_PATH: /data/truthgate/database
+      TRUTHGATE_STATE_PATH: /data/truthgate/state
+      TRUTHGATE_HEALTH_URL: https://127.0.0.1:443/
+      TRUTHGATE_KUBO_SETTINGS_PATH: /data/truthgate/config/kubo-settings.json
+      TRUTHGATE_KUBO_OVERRIDES_PATH: /data/truthgate/config/kubo-overrides.json
+      TRUTHGATE_KUBO_APPLY_SERVER_PROFILE: "${TRUTHGATE_KUBO_APPLY_SERVER_PROFILE:-}"
+      TRUTHGATE_KUBO_ENSURE_SWARM_LISTENERS: "${TRUTHGATE_KUBO_ENSURE_SWARM_LISTENERS:-}"
+      TRUTHGATE_KUBO_ROUTING_TYPE: "${TRUTHGATE_KUBO_ROUTING_TYPE:-}"
+      TRUTHGATE_KUBO_HOLE_PUNCHING: "${TRUTHGATE_KUBO_HOLE_PUNCHING:-}"
+      TRUTHGATE_KUBO_RELAY_CLIENT: "${TRUTHGATE_KUBO_RELAY_CLIENT:-}"
+      TRUTHGATE_KUBO_PROVIDE_ENABLED: "${TRUTHGATE_KUBO_PROVIDE_ENABLED:-}"
+      TRUTHGATE_KUBO_PROVIDE_STRATEGY: "${TRUTHGATE_KUBO_PROVIDE_STRATEGY:-}"
+      TRUTHGATE_KUBO_PROVIDE_INTERVAL: "${TRUTHGATE_KUBO_PROVIDE_INTERVAL:-}"
+      TRUTHGATE_KUBO_PROVIDE_SWEEP: "${TRUTHGATE_KUBO_PROVIDE_SWEEP:-}"
+      TRUTHGATE_KUBO_PROVIDE_RESUME: "${TRUTHGATE_KUBO_PROVIDE_RESUME:-}"
+      TRUTHGATE_KUBO_STORAGE_MAX: "${TRUTHGATE_KUBO_STORAGE_MAX:-}"
+      TRUTHGATE_KUBO_STORAGE_PERCENT: "${TRUTHGATE_KUBO_STORAGE_PERCENT:-}"
+      TRUTHGATE_KUBO_STORAGE_FALLBACK: "${TRUTHGATE_KUBO_STORAGE_FALLBACK:-}"
+      TRUTHGATE_KUBO_STORAGE_GC_WATERMARK: "${TRUTHGATE_KUBO_STORAGE_GC_WATERMARK:-}"
+      TRUTHGATE_KUBO_ENABLE_GC: "${TRUTHGATE_KUBO_ENABLE_GC:-}"
+      TRUTHGATE_KUBO_PUBLIC_IPV4: "${TRUTHGATE_KUBO_PUBLIC_IPV4:-}"
+      TRUTHGATE_KUBO_PUBLIC_IPV6: "${TRUTHGATE_KUBO_PUBLIC_IPV6:-}"
+      TRUTHGATE_KUBO_ANNOUNCE_PORT: "${TRUTHGATE_KUBO_ANNOUNCE_PORT:-}"
+    ports:
+      - "${TRUTHGATE_HTTP_PORT:-80}:80/tcp"
+      - "${TRUTHGATE_HTTPS_PORT:-443}:443/tcp"
+      - "${IPFS_SWARM_PORT:-4001}:4001/tcp"
+      - "${IPFS_SWARM_PORT:-4001}:4001/udp"
+    volumes:
+      - type: bind
+        source: ${TRUTHGATE_DATA_HOST_PATH:-./data/truthgate}
+        target: /data/truthgate
+      - type: bind
+        source: ${IPFS_REPO_HOST_PATH:-./data/ipfs/repo}
+        target: /data/ipfs/repo
+      - type: bind
+        source: ${IPFS_BLOCKS_HOST_PATH:-./data/ipfs/blocks}
+        target: /data/ipfs/repo/blocks
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+      - /run/truthgate:rw,noexec,nosuid,size=64m
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/truthgate-healthcheck"]
+      interval: 30s
+      timeout: 10s
+      start_period: 90s
+      retries: 3
+    stop_grace_period: 45s

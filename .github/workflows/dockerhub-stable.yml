@@ -1,0 +1,205 @@
+name: Docker Hub stable release
+
+on:
+  push:
+    branches:
+      - stable
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dockerhub-stable-release
+  cancel-in-progress: false
+
+jobs:
+  appliance-ci:
+    name: Validate and smoke test appliance
+    uses: ./.github/workflows/docker-ci.yml
+
+  repository-migration:
+    name: Validate legacy Kubo migration
+    uses: ./.github/workflows/docker-repo-migration.yml
+
+  tls-lifecycle:
+    name: Validate TLS lifecycle
+    uses: ./.github/workflows/tls-lifecycle.yml
+
+  prepare-release:
+    name: Allocate stable version
+    needs:
+      - appliance-ci
+      - repository-migration
+      - tls-lifecycle
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      series: ${{ steps.version.outputs.series }}
+      tag: ${{ steps.version.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calculate idempotent patch version
+        id: version
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          series="$(tr -d '[:space:]' < VERSION)"
+          if [[ ! "${series}" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            echo "VERSION must contain only a major.minor series such as 0.1." >&2
+            exit 1
+          fi
+
+          git fetch --force --tags origin
+
+          existing_tag=""
+          while IFS= read -r candidate; do
+            [[ -n "${candidate}" ]] || continue
+            if [[ "${candidate}" =~ ^v${series//./\.}\.([0-9]+)$ ]]; then
+              existing_tag="${candidate}"
+            fi
+          done < <(git tag --points-at "${GITHUB_SHA}" --list "v${series}.*" | sort -V)
+
+          if [[ -n "${existing_tag}" ]]; then
+            tag="${existing_tag}"
+            version="${tag#v}"
+            echo "Reusing ${tag}; this commit was already assigned a stable version."
+          else
+            max_patch=-1
+
+            while IFS= read -r candidate; do
+              [[ -n "${candidate}" ]] || continue
+
+              if [[ "${candidate}" =~ ^v${series//./\.}\.([0-9]+)$ ]]; then
+                patch="${BASH_REMATCH[1]}"
+                if (( patch > max_patch )); then
+                  max_patch="${patch}"
+                fi
+              fi
+            done < <(git tag --list "v${series}.*")
+
+            version="${series}.$((max_patch + 1))"
+            tag="v${version}"
+
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag --annotate "${tag}" --message "TruthGate ${tag}" "${GITHUB_SHA}"
+            git push origin "${tag}"
+
+            echo "Created stable release tag ${tag}."
+          fi
+
+          echo "series=${series}" >>"${GITHUB_OUTPUT}"
+          echo "version=${version}" >>"${GITHUB_OUTPUT}"
+          echo "tag=${tag}" >>"${GITHUB_OUTPUT}"
+
+  publish-dockerhub:
+    name: Publish Docker Hub image
+    needs:
+      - prepare-release
+    runs-on: ubuntu-24.04
+    env:
+      IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/truthgate-ipfs
+      VERSION: ${{ needs.prepare-release.outputs.version }}
+      SERIES: ${{ needs.prepare-release.outputs.series }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Generate stable image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ env.VERSION }},priority=900
+            type=raw,value=${{ env.SERIES }},priority=800
+            type=raw,value=stable,priority=700
+            type=raw,value=latest,priority=600
+            type=sha,prefix=sha-,priority=100
+          labels: |
+            org.opencontainers.image.title=TruthGate
+            org.opencontainers.image.description=Secure, self-hosted IPFS edge gateway with HTTPS, authentication, GUI, and Kubo.
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Publish AMD64 + ARM64 to Docker Hub
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: production
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
+
+      - name: Verify published multi-platform manifest
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          docker buildx imagetools inspect "${IMAGE_NAME}:${VERSION}" \
+            | tee dockerhub-manifest.txt
+
+          grep -F 'linux/amd64' dockerhub-manifest.txt
+          grep -F 'linux/arm64' dockerhub-manifest.txt
+
+      - name: Upload Docker Hub manifest diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dockerhub-manifest-${{ env.VERSION }}
+          path: dockerhub-manifest.txt
+          if-no-files-found: ignore
+
+  update-dockerhub-description:
+    name: Sync Docker Hub README
+    needs:
+      - prepare-release
+      - publish-dockerhub
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update Docker Hub overview from README
+        uses: peter-evans/dockerhub-description@e98e4d1628a5f3be2be7c231e50981aee98723ae
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ secrets.DOCKERHUB_USERNAME }}/truthgate-ipfs
+          short-description: Secure, self-hosted IPFS edge gateway with HTTPS, authentication, GUI, and Kubo.
+          readme-filepath: ./README.md
+          enable-url-completion: true
+
+      - name: Stable release summary
+        shell: bash
+        run: |
+          {
+            echo "## TruthGate stable release"
+            echo
+            echo "- Git tag: \`${{ needs.prepare-release.outputs.tag }}\`"
+            echo "- Docker image: \`${{ secrets.DOCKERHUB_USERNAME }}/truthgate-ipfs:${{ needs.prepare-release.outputs.version }}\`"
+            echo "- Moving tags: \`stable\`, \`latest\`, and \`${{ needs.prepare-release.outputs.series }}\`"
+            echo "- Architectures: \`linux/amd64\`, \`linux/arm64\`"
+            echo "- Docker Hub overview synchronized from \`README.md\`"
+          } >>"${GITHUB_STEP_SUMMARY}"
